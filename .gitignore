@@ -26,8 +26,11 @@ __pycache__/
 .idea/
 .DS_Store
 Thumbs.db
-# 忽略 YOLO 的运行输出
+
+# 忽略训练产生的权重和日志
 runs/
+*.pt
+*.log
 
 # 5. 排除深度学习模型大文件与推理产物
 *.pt
