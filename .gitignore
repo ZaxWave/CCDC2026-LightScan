@@ -7,7 +7,10 @@
 # 2. 保持根目录 README 始终可见
 !README.md
 
-# 3. 排除本地开发环境垃圾
+# 3. 排除 dashcam-sampler 数据目录
+src/utils/dashcam-sampler/data/
+
+# 5. 排除本地开发环境垃圾
 venv/
 env/
 .env
@@ -17,7 +20,7 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-# 4. 排除深度学习模型大文件与推理产物
+# 6. 排除深度学习模型大文件与推理产物
 *.pt
 *.pth
 *.weights
@@ -27,13 +30,13 @@ Thumbs.db
 *.tflite
 *.bin
 
-# 5. 排除 Office/PPT 产生的临时锁定文件
+# 7. 排除 Office/PPT 产生的临时锁定文件
 ~$*.doc*
 ~$*.ppt*
 *~$*.docx
 *~$*.pptx
 
-# 6. 排除所有压缩包
+# 8. 排除所有压缩包
 *.zip
 *.tar.gz
 *.rar
