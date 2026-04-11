@@ -1,16 +1,12 @@
 # 1. 忽略四个正式提交文件夹下的所有实际内容
-/2026017676-01作品与答辩材料/*
-/2026017676-02素材与源码/*
-/2026017676-03设计与开发文档/*
-/2026017676-04作品展示视频/*
 
 # 2. 保持 README 始终可见
 !README.md
 !datasets\README.md
+!data\README.md
 
 # 3. 排除数据目录
-data/dashcam-sampler/input/
-data/dashcam-sampler/output/
+data/
 # 忽略数据集
 dataset/
 

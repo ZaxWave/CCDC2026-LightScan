@@ -1,4 +1,4 @@
-# --- 核心算法 ---
+# --- 核心算法 (YOLOv11 & Torch) ---
 ultralytics>=8.3.0
 torch>=2.0.0
 torchvision>=0.15.0
@@ -10,6 +10,17 @@ pandas>=2.0.0
 matplotlib>=3.7.0
 tqdm>=4.65.0
 
-# --- OCR 抽帧脚本专用 ---
+# --- OCR 识别 (PaddleOCR) ---
 paddlepaddle>=2.5.0
 paddleocr>=2.7.0
+
+# --- 后端框架 (FastAPI) ---
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+python-multipart>=0.0.9
+pydantic>=2.0.0
+python-dotenv>=1.0.0
+
+# --- 通用工具 ---
+requests>=2.31.0
+pillow>=10.0.0
