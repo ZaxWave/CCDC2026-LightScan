@@ -4,15 +4,14 @@ submission/2026017676-02素材与源码/
 submission/2026017676-03设计与开发文档/
 submission/2026017676-04作品展示视频/
 
-# 2. 保持 README 始终可见
+# 2. 排除数据目录下的所有内容
+data/*
+datasets/*
+# 保持 README 始终可见
 !README.md
-!datasets\README.md
-!data\README.md
-
-# 3. 排除数据目录
-data/
-# 忽略数据集
-dataset/
+!datasets/README.md
+!data/README.md
+!**/ .gitkeep
 
 # 4. 排除 AI 工具生成文件
 .claude/
