@@ -126,7 +126,7 @@ def auto_detect_speed_region(cap, ocr_engine, probe_frames=5, padding=20):
                         page.get("rec_scores", []),
                         page.get("rec_polys", []),
                     ):
-                        if score > 0.3 and re.search(r"\d+\s*[KX]M/?H", text, re.IGNORECASE):
+                        if score > 0.3 and re.search(r"\d+\s*[KX]M.?H", text, re.IGNORECASE):
                             pts = poly.reshape(-1, 2)
                             boxes.append((
                                 x0 + int(pts[:, 0].min()),
@@ -178,7 +178,7 @@ def extract_speed_kmh(ocr_result):
     full_text = " ".join(texts)
 
     # 优先匹配 KM/H（K 有时被 OCR 误读为 X）
-    match = re.search(r"(\d+)\s*[KX]M/?H", full_text, re.IGNORECASE)
+    match = re.search(r"(\d+)\s*[KX]M.?H", full_text, re.IGNORECASE)
     if match:
         return float(match.group(1)), "kmh"
 
@@ -225,7 +225,11 @@ def main():
         print("正在自动检测速度文字位置（扫描前几帧）……")
         region = auto_detect_speed_region(cap, ocr_engine)
         if region is None:
-            sys.exit("错误：未能自动检测到 KM/H 文字，请用 --ocr-region 手动指定区域。")
+            sys.exit(
+                "错误：未能自动检测到速度文字，请用 --ocr-region 手动指定区域。\n"
+                "提示：先截取视频第一帧，找到速度数字的像素位置，\n"
+                "      格式为 'x1,y1,x2,y2'，例如 --ocr-region \"0,720,640,800\""
+            )
         x1, y1, x2, y2 = region
         print(f"OCR 区域（自动）：x=[{x1},{x2}]  y=[{y1},{y2}]")
 
