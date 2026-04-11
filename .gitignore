@@ -9,7 +9,8 @@
 !datasets\README.md
 
 # 3. 排除数据目录
-data/dashcam-sampler/data/
+data/dashcam-sampler/input/
+data/dashcam-sampler/output/
 # 忽略数据集
 dataset/
 
