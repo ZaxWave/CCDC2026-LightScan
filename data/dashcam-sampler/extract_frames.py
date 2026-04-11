@@ -115,23 +115,16 @@ def auto_detect_speed_region(cap, ocr_engine, probe_frames=5, padding=20):
                     result = ocr_engine.ocr(tile)
                 except Exception:
                     continue
-                for page in (result or []):
-                    if not isinstance(page, dict):
-                        continue
-                    for text, score, poly in zip(
-                        page.get("rec_texts", []),
-                        page.get("rec_scores", []),
-                        page.get("rec_polys", []),
-                    ):
-                        if score > 0.3 and re.search(r"\d+\s*[KX]M.?H", text, re.IGNORECASE):
-                            pts = poly.reshape(-1, 2)
-                            boxes.append((
-                                x0 + int(pts[:, 0].min()),
-                                y0 + int(pts[:, 1].min()),
-                                x0 + int(pts[:, 0].max()),
-                                y0 + int(pts[:, 1].max()),
-                                w, h,
-                            ))
+                for text, score, poly in _iter_ocr_items(result):
+                    if score > 0.3 and re.search(r"\d+\s*[KX]M.?H", text, re.IGNORECASE):
+                        pts = poly.reshape(-1, 2)
+                        boxes.append((
+                            x0 + int(pts[:, 0].min()),
+                            y0 + int(pts[:, 1].min()),
+                            x0 + int(pts[:, 0].max()),
+                            y0 + int(pts[:, 1].max()),
+                            w, h,
+                        ))
 
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # 重置到开头
 
@@ -144,6 +137,38 @@ def auto_detect_speed_region(cap, ocr_engine, probe_frames=5, padding=20):
     x2 = min(boxes[0][4], max(b[2] for b in boxes) + padding)
     y2 = min(boxes[0][5], max(b[3] for b in boxes) + padding)
     return x1, y1, x2, y2
+
+
+# ---------------------------------------------------------------------------
+# OCR 结果解析工具（兼容新旧版 PaddleOCR）
+# ---------------------------------------------------------------------------
+
+def _iter_ocr_items(result):
+    """
+    统一迭代 PaddleOCR 返回结果，yield (text, score, poly_or_None)。
+
+    新版 PaddleOCR 3.x 返回 List[dict]，key 为 rec_texts / rec_scores / rec_polys。
+    旧版 PaddleOCR 2.x 返回 List[List]，每条为 [box_points, (text, score)]。
+    """
+    import numpy as np
+    for page in (result or []):
+        if isinstance(page, dict):
+            # 新版格式
+            for text, score, poly in zip(
+                page.get("rec_texts", []),
+                page.get("rec_scores", []),
+                page.get("rec_polys", []),
+            ):
+                yield text, score, poly
+        elif isinstance(page, list):
+            # 旧版格式
+            for item in page:
+                try:
+                    box, (text, score) = item
+                    poly = np.array(box, dtype=np.float32)
+                    yield text, score, poly
+                except Exception:
+                    continue
 
 
 # ---------------------------------------------------------------------------
@@ -162,14 +187,10 @@ def extract_speed_kmh(ocr_result):
     if not ocr_result:
         return None
 
-    # 新版 PaddleOCR 返回 List[dict]，每个 dict 有 rec_texts / rec_scores
     texts = []
-    for page in ocr_result:
-        if not isinstance(page, dict):
-            continue
-        for text, score in zip(page.get("rec_texts", []), page.get("rec_scores", [])):
-            if score > 0.3:
-                texts.append(text)
+    for text, score, _ in _iter_ocr_items(ocr_result):
+        if score > 0.3:
+            texts.append(text)
     if not texts:
         return None
     full_text = " ".join(texts)
