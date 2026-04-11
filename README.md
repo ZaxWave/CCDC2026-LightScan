@@ -28,14 +28,17 @@ CCDC2026-LightScan/
 ├── README.md                           # 项目主说明文档
 ├── LICENSE                             # Apache 2.0 许可证
 ├── requirements.txt                    # 全局运行环境依赖清单
+├── assets/                             # 开发素材
+├── data/                               # 数据处理脚本
+│
 ├── docs/                               # 说明文档与技术积淀
 │   ├── research/                       # 调研文档
 │   ├── requirements/                   # 作品要求
 │   ├── technical/                      # 技术文档
 │   ├── notices/                        # 通知文档
 │   └── resources/                      # 参考资料
+│
 ├── models/                             # 核心算法模型及权重
-├── assets/                             # 开发素材
 │
 ├── src/                                # 🛠️ 研发源代码主体
 │   ├── api/                            # 后端服务逻辑层
@@ -50,18 +53,44 @@ CCDC2026-LightScan/
 ├── 2026017676-02素材与源码/             # 📦 源码包与代表性素材
 ├── 2026017676-03设计与开发文档/         # 📦 官方技术与设计报告
 └── 2026017676-04作品展示视频/           # 📦 演示视频 (MP4)
-````
+```
 
 -----
 
-## 📑 3. 研发规范与状态 (Development Standards)
+## 🛠️ 3. 环境搭建 (Setup)
+
+本项目推荐使用 **Python 3.11** 以获得最佳的性能与兼容性。
+
+### 1) 创建虚拟环境 (Conda 推荐)
+```powershell
+# 创建环境
+conda create -n lightscan python=3.11 -y
+# 激活环境
+conda activate lightscan
+```
+
+### 2) 安装依赖
+```powershell
+# 安装依赖
+pip install -r requirements.txt
+```
+
+### 3) 验证环境
+```PowerShell
+# 检查 YOLO 版本
+yolo version
+```
+
+-----
+
+## 📑 4. 研发规范 (Development Standards)
 
   * **版本管理**：使用 Git 进行版本控制。大型二进制资产（模型权重、超清视频、数据集）不计入版本库，通过 **Release** 附件或官方指定网盘分发。
   * **架构原则**：采用前后端解耦架构。`src/` 目录仅保留纯粹逻辑实现，确保代码符合 PEP 8 风格指南。
 
 -----
 
-## ⚖️ 4. 法律与合规声明 (Compliance)
+## ⚖️ 5. 法律与合规声明 (Compliance)
 
 > [\!IMPORTANT]
 > **原创性声明**：本项目除引用必要开源组件外，系统架构、核心算法逻辑及相关文档均为团队成员原创。
