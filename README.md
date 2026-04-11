@@ -2,28 +2,37 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.9+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Framework](https://img.shields.io/badge/Framework-PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![Build](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](#)
+[![PyTorch](https://img.shields.io/badge/Framework-PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![YOLOv11](https://img.shields.io/badge/Algorithm-YOLOv11-00FFFF?logo=ultralytics&logoColor=black)](https://github.com/ultralytics/ultralytics)
+[![Build](https://img.shields.io/badge/CCDC%202026-v1.0--alpha-orange)](#)
 
 本项目为 **2026年（第19届）中国大学生计算机设计大赛 (4C)** 参赛作品。
 
 ---
 
-## 📖 1. 项目定位 (Project Positioning)
+## 📖 1. 项目概览 (Project Overview)
 
-* **项目名称**：轻巡智维 (LightScan)
+### 1.1 基本信息
+* **作品名称**：轻巡智维 (LightScan)
 * **作品编号**：2026017676
-* **核心背景**：针对我国公路网从“大规模建设”向“高质量养护”转型的战略需求，研发的一套兼容普适性感知设备的道路病害智能检测系统。
-* **技术价值**：通过提升边缘侧计算效率与算法鲁棒性，实现低成本、高频次、全覆盖的数字化巡检，为智慧交通“精细化养护”提供技术闭环。
+* **应用领域**：智慧交通、道路自动化养护
+
+### 1.2 技术架构 (Technical Architecture)
+本项目采用主流的深度学习感知与全栈 Web 开发架构：
+* **算法核心**：采用 **YOLOv11** 目标检测框架，兼顾实时检测速率与复杂环境下的识别精度。
+* **后端支撑**：选用 **FastAPI** 异步框架，通过高并发处理能力确保推理接口的响应速度。
+* **前端展示**：基于 **React** 组件化开发，实现响应式布局与检测结果的实时数据渲染。
 
 ---
 
 ## 📂 2. 文件结构声明 (Project Structure)
 
-本项目采用“**产物与源码分离**”的工程化管理逻辑。根目录下的四个数字文件夹严格遵循大赛交付规范。
+本项目采用“**产物与源码分离**”的工程化管理逻辑，严格遵循大赛交付规范。
 
 ```text
-CCDC2026-LightScan/ 
+CCDC2026-LightScan/
+├── train.py                            # 🚀 核心训练入口
+├── inference.py                        # 🚀 核心推理引擎 
 ├── .gitignore                          # Git 忽略配置
 ├── README.md                           # 项目主说明文档
 ├── LICENSE                             # Apache 2.0 许可证
