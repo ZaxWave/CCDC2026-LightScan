@@ -21,7 +21,7 @@
 本项目采用主流的深度学习感知与全栈 Web 开发架构：
 * **算法核心**：采用 **YOLOv11** 目标检测框架，兼顾实时检测速率与复杂环境下的识别精度。
 * **后端支撑**：选用 **FastAPI** 异步框架，通过高并发处理能力确保推理接口的响应速度。
-* **前端展示**：原生 HTML + CSS + JavaScript 单页应用，实现响应式布局与检测结果的实时渲染。（当前版本使用原生 JS 以简化部署；后续计划迁移至 React 组件化架构）
+* **前端展示**：基于 **React 18 + Vite** 的组件化单页应用，CSS Modules 管理样式，实现响应式布局与检测结果的实时渲染。
 
 ---
 
@@ -77,9 +77,19 @@ CCDC2026-LightScan/
 │   │       └── services/
 │   │           ├── inference_service.py # YOLO 推理单例封装
 │   │           └── video_service.py    # 视频抽帧服务（OCR 距离 / 时间估算）
-│   └── frontend/                       # 前端：原生 HTML + JS
-│       └── public/
-│           └── index.html              # 单页应用（图片/视频检测、配置 Modal、结果展示）
+│   └── frontend/                       # 前端：React 18 + Vite
+│       ├── src/                        # React 源码
+│       │   ├── main.jsx                # 入口
+│       │   ├── App.jsx                 # 根组件
+│       │   ├── api/client.js           # API 封装（detectImages / detectVideo）
+│       │   ├── components/             # 通用组件（Nav、Hero、TabBar、UploadArea 等）
+│       │   │   └── video/              # 视频检测 Modal 与 Canvas 框选组件
+│       │   ├── panels/                 # 页面面板（ImagePanel / VideoPanel）
+│       │   └── styles/variables.css   # 全局 CSS 变量（设计系统）
+│       ├── public/                     # 构建产物（FastAPI 托管目录）
+│       ├── index.html                  # Vite 开发模板
+│       ├── vite.config.js              # Vite 配置（outDir → public，代理 /api → 8000）
+│       └── package.json
 │
 ├── tools/                              # 🛠️ 独立工具链
 │   └── dashcam_sampler/                # 行车记录仪按距离抽帧工具
@@ -136,7 +146,31 @@ python -c "import torch; print(torch.cuda.get_device_name(0))"
 
 -----
 
-## 🚀 4. 启动 Web 服务 (Run Server)
+## 🖥️ 4. 前端开发 (Frontend Dev)
+
+前端基于 Node.js，首次使用需安装依赖：
+
+```powershell
+cd src/frontend
+npm install
+```
+
+**开发模式**（热更新，API 自动代理到后端 8000 端口）：
+
+```powershell
+npm run dev
+# → http://localhost:5173
+```
+
+**生产构建**（产物输出到 `src/frontend/public/`，供 FastAPI 托管）：
+
+```powershell
+npm run build
+```
+
+-----
+
+## 🚀 5. 启动 Web 服务 (Run Server)
 
 模型训练完成、权重就位后，执行以下命令启动推理服务：
 
