@@ -1,0 +1,4 @@
+.wrap { margin-bottom: 32px; }
+.labels { display: flex; justify-content: space-between; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.track { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+.fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width 0.3s; }

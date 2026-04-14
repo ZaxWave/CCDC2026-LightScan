@@ -1,0 +1,5 @@
+.nav { position: sticky; top: 0; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 40px; height: 56px; background: rgba(255,255,255,0.85); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); }
+.brand { font-size: 15px; font-weight: 600; letter-spacing: 0.12em; color: var(--dark); text-decoration: none; }
+.links { display: flex; gap: 4px; }
+.links a { color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 500; padding: 6px 14px; border-radius: 4px; transition: color 0.2s, background 0.2s; }
+.links a:hover { color: var(--dark); background: var(--ash); }

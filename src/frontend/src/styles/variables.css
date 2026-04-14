@@ -1,0 +1,17 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --blue:    #3E6AE1;
+  --dark:    #171A20;
+  --body:    #393C41;
+  --muted:   #5C5E62;
+  --ash:     #F4F4F4;
+  --border:  #EEEEEE;
+  --white:   #FFFFFF;
+  --red:     #D93025;
+}
+body { font-family: -apple-system, "PingFang SC", "Helvetica Neue", Arial, sans-serif; background: var(--white); color: var(--body); font-size: 14px; line-height: 1.6; }
+.tag { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 3px; }
+.tag-crack    { background: #fff0e6; color: #c0570a; }
+.tag-pothole  { background: #ffeaea; color: #c01a1a; }
+.tag-repair   { background: #e8f4ff; color: #1a5fc0; }
+.tag-ok       { background: #e6f9ee; color: #1a8045; }

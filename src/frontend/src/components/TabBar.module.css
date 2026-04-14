@@ -1,0 +1,4 @@
+.bar { display: flex; border-bottom: 1px solid var(--border); max-width: 1100px; margin: 0 auto; padding: 0 32px; }
+.tab { background: none; border: none; cursor: pointer; padding: 14px 20px; font-size: 14px; font-weight: 500; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .2s, border-color .2s; }
+.tab:hover { color: var(--dark); }
+.tab.active { color: var(--dark); border-bottom-color: var(--dark); }

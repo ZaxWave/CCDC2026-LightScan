@@ -1,0 +1,7 @@
+.area { border: 2px dashed var(--border); border-radius: 8px; padding: 60px 40px; text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s; background: var(--ash); margin-bottom: 48px; }
+.area:hover, .over { border-color: var(--blue) !important; background: #f0f4ff !important; }
+.icon { width: 44px; height: 44px; margin: 0 auto 16px; opacity: 0.35; }
+.area h3 { font-size: 15px; font-weight: 500; color: var(--dark); margin-bottom: 6px; }
+.area p { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+.btn { background: var(--blue); color: var(--white); border: none; padding: 0 28px; height: 40px; border-radius: 4px; font-size: 14px; font-weight: 500; cursor: pointer; transition: background 0.2s; }
+.btn:hover { background: #3260d0; }

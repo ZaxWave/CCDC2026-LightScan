@@ -1,0 +1,5 @@
+.row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 48px; }
+.card { background: var(--ash); border-radius: 8px; padding: 24px; }
+.val { font-size: 28px; font-weight: 500; color: var(--dark); line-height: 1; margin-bottom: 6px; }
+.blue { color: var(--blue); }
+.label { font-size: 12px; color: var(--muted); }
