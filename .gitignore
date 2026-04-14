@@ -13,6 +13,11 @@ datasets/*
 !data/README.md
 !**/ .gitkeep
 
+# 3. 排除前端依赖与缓存
+src/frontend/node_modules/
+src/frontend/.vite/
+src/frontend/public/assets/
+
 # 4. 排除 AI 工具生成文件
 .claude/
 DESIGN.md
