@@ -2,21 +2,28 @@
 
 本目录用于存放项目所需的 YOLO 权重文件（`.pt`）。
 
-## 当前使用的模型
-* **yolo11n.pt**: 官方预训练权重（COCO 数据集）。用于基础环境测试及车辆/行人检测。
-* **[待定模型]**: 计划后续加入针对道路缺陷（Crack, Pothole）微调后的模型。
+## 目录结构
 
-## 如何获取权重
-如果该目录下缺少模型文件，请执行以下任一操作：
+```
+models/
+├── yolo11n.pt          # YOLO11n 官方预训练权重（COCO），用于微调的初始权重
+├── yolo26n.pt          # Ultralytics AMP 验证时自动下载的辅助权重
+└── weights/
+    └── best.pt         # 在 RDD2022 上微调后的最优权重（训练完成后从 runs/ 复制至此）
+```
 
-1. **自动下载**：
-   运行推理脚本时，Ultralytics 会自动尝试下载官方模型。
-   ```powershell
-   yolo predict model=models/yolo11n.pt source=...
-    ```
-2. **手动下载**：
-   从 Ultralytics GitHub Releases：https://github.com/ultralytics/assets/releases 获取。
-   下载后将 `.pt` 文件放置于 `models/` 目录下。
+## 权重说明
+
+* **yolo11n.pt**：Ultralytics 官方预训练权重（COCO 80 类），作为道路病害微调的骨干起点。
+* **weights/best.pt**：在 RDD2022（Japan + China_MotorBike + China_Drone）上微调得到的最优模型，供 `inference.py` 和后端服务直接调用。
+
+## 训练完成后更新权重
+
+正式训练结束后，将最优权重复制到此目录：
+
+```powershell
+copy runs\train\lightscan_exp\weights\best.pt models\weights\best.pt
+```
 
 ---
 

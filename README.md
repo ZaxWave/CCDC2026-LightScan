@@ -32,14 +32,24 @@
 ```text
 CCDC2026-LightScan/
 ├── train.py                            # 🚀 核心训练入口
-├── inference.py                        # 🚀 核心推理引擎 
+├── inference.py                        # 🚀 核心推理引擎
 ├── .gitignore                          # Git 忽略配置
 ├── README.md                           # 项目主说明文档
 ├── LICENSE                             # Apache 2.0 许可证
 ├── requirements.txt                    # 全局运行环境依赖清单
 ├── assets/                             # 开发素材
 ├── data/                               # 数据目录（原始素材、预处理结果、中间产物）
+│
 ├── datasets/                           # 数据集
+│   ├── road_defect.yaml                # Ultralytics 数据集配置（4 类病害）
+│   ├── RDD2022_yolo/                   # 转换后的 YOLO 格式数据（已生成，共 11,753 张）
+│   │   ├── images/train/               # 训练集图片（9,403 张）
+│   │   ├── images/val/                 # 验证集图片（2,350 张）
+│   │   ├── labels/train/               # 训练集标注
+│   │   └── labels/val/                 # 验证集标注
+│   ├── Japan/                          # RDD2022 原始数据（VOC 格式，git 忽略）
+│   ├── China_MotorBike/                # RDD2022 原始数据（VOC 格式，git 忽略）
+│   └── China_Drone/                    # RDD2022 原始数据（VOC 格式，git 忽略）
 │
 ├── docs/                               # 说明文档与技术积淀
 │   ├── research/                       # 调研文档
@@ -49,6 +59,13 @@ CCDC2026-LightScan/
 │   └── resources/                      # 参考资料
 │
 ├── models/                             # 核心算法模型及权重
+│   ├── yolo11n.pt                      # 官方预训练权重（微调起点）
+│   └── weights/
+│       └── best.pt                     # 微调后最优权重（训练完成后从 runs/ 复制）
+│
+├── runs/                               # 训练输出（git 忽略）
+│   └── train/
+│       └── lightscan_exp/              # 正式训练结果
 │
 ├── src/                                # 🛠️ 研发源代码主体
 │   ├── backend/                        # 后端：FastAPI
@@ -58,20 +75,20 @@ CCDC2026-LightScan/
 │   │       ├── models/                 # 模型定义
 │   │       ├── services/               # 核心逻辑
 │   │       └── core/                   # 全局配置
-│   │   
 │   └── frontend/                       # 前端：React
 │       ├── public/                     # 公共静态资源
-│       └── src/                 
+│       └── src/
 │           ├── css/                    # 全局样式
 │           ├── components/             # UI 组件化
 │           └── assets/                 # Logo、图标等
 │
 ├── tools/                              # 🛠️ 独立工具链
+│   └── dashcam_sampler/                # 行车记录仪按距离抽帧工具
 └── submission/                         # 归档
-    ├── 2026017676-01作品与答辩材料/     
-    ├── 2026017676-02素材与源码/        
-    ├── 2026017676-03设计与开发文档/   
-    └── 2026017676-04作品展示视频/      
+    ├── 2026017676-01作品与答辩材料/
+    ├── 2026017676-02素材与源码/
+    ├── 2026017676-03设计与开发文档/
+    └── 2026017676-04作品展示视频/
 
 ```
 
@@ -89,16 +106,33 @@ conda create -n lightscan python=3.11 -y
 conda activate lightscan
 ```
 
-### 2) 安装依赖
+### 2) 安装 PyTorch（根据显卡选择）
+
+> ⚠️ **RTX 5070 Ti / Blackwell 架构用户必读**
+> RTX 50 系列（Blackwell，sm_120）不在 PyTorch stable 支持范围内（最高 sm_90），
+> **必须使用 Nightly 版本**，否则 GPU 加速无法正常启用。
+
+**RTX 50 系列 / Blackwell（sm_120）→ 使用 Nightly：**
 ```powershell
-# 安装依赖
+pip install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+```
+
+**RTX 40 系列及以下 / 其他 NVIDIA 显卡 → 使用 Stable：**
+```powershell
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+```
+
+### 3) 安装其余依赖
+```powershell
 pip install -r requirements.txt
 ```
 
-### 3) 验证环境
+### 4) 验证环境
 ```PowerShell
 # 检查 YOLO 版本
 yolo version
+# 检查 GPU 是否正常
+python -c "import torch; print(torch.cuda.get_device_name(0))"
 ```
 
 -----

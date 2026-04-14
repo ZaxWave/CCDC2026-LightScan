@@ -1,13 +1,18 @@
 import cv2
 import torch
+from pathlib import Path
 from ultralytics import YOLO
+
+ROOT = Path(__file__).resolve().parent
 
 class LightScanInference:
     """
     LightScan 推理核心类
     职责：加载模型权重、执行图像推断、结构化输出结果
     """
-    def __init__(self, model_path="models/weights/best.pt", device=None):
+    def __init__(self, model_path=None, device=None):
+        if model_path is None:
+            model_path = ROOT / "models" / "weights" / "best.pt"
         # 自动选择设备: 有 GPU 用 GPU, 否则用 CPU
         if device is None:
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
