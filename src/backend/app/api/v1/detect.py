@@ -4,7 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.services.inference_service import run_detect
 from app.db.database import get_db
-from app.db.models import DiseaseRecord
+from app.db.models import DiseaseRecord, User
+from app.api.deps import get_current_user # 引入路由守卫
 
 router = APIRouter(prefix="/api/v1", tags=["detect"])
 
@@ -15,7 +16,8 @@ MAX_FILES = 20
 async def detect(
     files: list[UploadFile] = File(...),
     conf: float = Query(0.25, ge=0.0, le=1.0, description="置信度阈值"),
-    db: Session = Depends(get_db)  # 在请求生命周期内自动获取/释放数据库连接
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # 强制要求用户登录并获取身份
 ):
     """
     接收 1–20 张图片，返回每张的检测结果与标注图，并将时空病害数据写入 PostgreSQL 数据库。
@@ -59,7 +61,8 @@ async def detect(
                 label_cn=det.get("label_cn"),     # 例: "坑槽"
                 confidence=det.get("conf"),       # 置信度数值
                 color_hex=det.get("color"),       # 例: "#ff4444"
-                bbox=det.get("bbox")              # [x1, y1, x2, y2]
+                bbox=det.get("bbox"),             # [x1, y1, x2, y2]
+                creator_id=current_user.id        
             )
             db.add(db_record)
         

@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import DiseaseRecord
+from app.db.models import DiseaseRecord, User
 from app.schemas.disease import DailyCount, DiseaseRecordOut, StatsOut
+from app.api.deps import get_current_user # 引入路由守卫
 
 router = APIRouter(prefix="/api/v1/gis", tags=["gis"])
 
@@ -17,7 +18,7 @@ def get_records(
     offset: int = Query(0, ge=0, description="跳过条数"),
     db: Session = Depends(get_db),
 ):
-    """获取含有坐标的病害记录（支持分页）"""
+    """获取含有坐标的病害记录（支持分页）- 全平台共享，无需登录也可看"""
     records = (
         db.query(DiseaseRecord)
         .filter(DiseaseRecord.lat != 0.0, DiseaseRecord.lng != 0.0)
@@ -27,6 +28,36 @@ def get_records(
         .all()
     )
     return records
+
+
+@router.get("/my-records", response_model=list[DiseaseRecordOut])
+def get_my_records(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # 强制鉴权
+):
+    """获取当前用户上传的病害记录 - 个人维护专属"""
+    return db.query(DiseaseRecord).filter(
+        DiseaseRecord.creator_id == current_user.id
+    ).order_by(DiseaseRecord.timestamp.desc()).all()
+
+
+@router.delete("/records/{record_id}")
+def delete_record(
+    record_id: int, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user) # 强制鉴权
+):
+    """删除病害记录 - 仅限本记录的创建者或管理员"""
+    record = db.query(DiseaseRecord).filter(DiseaseRecord.id == record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    
+    if record.creator_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="无权删除他人的记录")
+    
+    db.delete(record)
+    db.commit()
+    return {"message": "删除成功"}
 
 
 @router.get("/stats", response_model=StatsOut)
@@ -46,10 +77,8 @@ def get_stats(db: Session = Depends(get_db)):
         .all()
     )
 
-    # 将查询结果转为字典，便于按日期查找
     counts_by_date = {str(row.date): row.count for row in rows}
 
-    # 补全缺失的日期（填 0），保证始终返回 7 天
     daily = []
     for i in range(7):
         day = today - timedelta(days=6 - i)

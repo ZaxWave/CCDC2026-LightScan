@@ -1,23 +1,34 @@
-# src/backend/app/db/models.py
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB 
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from .database import Base
 
-class DiseaseRecord(Base):
-    __tablename__ = "disease_records"
+class User(Base):
+    __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
+    role = Column(String, default="worker")  # 角色：'admin' 或 'worker'
+    is_active = Column(Boolean, default=True)
+
+    # 建立一对多关联：一个用户对应多条检测记录
+    records = relationship("DiseaseRecord", back_populates="creator")
+
+class DiseaseRecord(Base):
+    __tablename__ = "disease_records"
+    id = Column(Integer, primary_key=True, index=True)
     filename = Column(String, index=True)
-    
-    # 时空 GIS 属性
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    lat = Column(Float, index=True)  # 纬度
-    lng = Column(Float, index=True)  # 经度
-    
-    # 病害属性
-    label = Column(String, index=True)       # D00, D10, D20, D40
-    label_cn = Column(String)                # 中文标签
-    confidence = Column(Float)               # 置信度
-    color_hex = Column(String)               # 前端展示色
-    bbox = Column(JSONB)                     # 使用 PG 高级 JSONB 存储边界框 [x1, y1, x2, y2]
+    lat = Column(Float, index=True)
+    lng = Column(Float, index=True)
+    label = Column(String, index=True)
+    label_cn = Column(String)
+    confidence = Column(Float)
+    color_hex = Column(String)
+    bbox = Column(JSONB)
+
+    # 新增外键和反向关联
+    creator_id = Column(Integer, ForeignKey("users.id"), index=True)
+    creator = relationship("User", back_populates="records")
