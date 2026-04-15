@@ -170,6 +170,8 @@ VITE_AMAP_SECURITY_CODE=你的高德安全密钥
 cd src/frontend
 # 安装基础依赖 + 高德地图加载器 
 npm install @amap/amap-jsapi-loader
+# 安装 ECharts 依赖
+npm install echarts echarts-for-react --save
 # 如果遇到版本冲突（React 18 vs 19），请使用强制模式
 npm install --legacy-peer-deps
 ```
