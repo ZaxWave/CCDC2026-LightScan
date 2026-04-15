@@ -7,11 +7,15 @@ Endpoints:
   POST /api/v1/detect-video              — 主推理接口（ocr / timed 两种模式）
 """
 
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
+from app.db.database import get_db
+from app.db.models import DiseaseRecord
 from app.services.video_service import (
     detect_video_ocr,
     detect_video_timed,
@@ -50,6 +54,7 @@ async def detect_video(
     approx_speed_kmh: Optional[float] = Form(
         None, description="大致车速 km/h（仅 timed 模式使用）"
     ),
+    db: Session = Depends(get_db),
 ):
     """
     视频推理主接口。
@@ -62,7 +67,7 @@ async def detect_video(
       "status":       "ok" | "ocr_failed",
       "total_frames": int,
       "results": [
-        { "filename", "detections", "image_b64", "inference_ms" },
+        { "filename", "detections", "image_b64", "inference_ms", "location", "timestamp" },
         ...
       ]
     }
@@ -116,5 +121,36 @@ async def detect_video(
         )
     except ValueError as e:
         raise HTTPException(422, detail=str(e))
+
+    # ==========================================
+    # 将视频各帧检测结果持久化到 PostgreSQL
+    # ==========================================
+    frame_results = result.get("results", [])
+    for frame in frame_results:
+        location = frame.get("location") or {}
+        lat = location.get("lat", 0.0)
+        lng = location.get("lng", 0.0)
+
+        raw_ts = frame.get("timestamp")
+        try:
+            ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
+        except (ValueError, TypeError):
+            ts = datetime.utcnow()
+
+        for det in frame.get("detections", []):
+            db_record = DiseaseRecord(
+                filename=frame.get("filename"),
+                lat=lat,
+                lng=lng,
+                timestamp=ts,
+                label=det.get("label"),
+                label_cn=det.get("label_cn"),
+                confidence=det.get("conf"),
+                color_hex=det.get("color"),
+                bbox=det.get("bbox"),
+            )
+            db.add(db_record)
+
+    db.commit()
 
     return JSONResponse(content=result)

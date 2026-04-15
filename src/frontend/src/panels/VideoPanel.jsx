@@ -19,14 +19,16 @@ export default function VideoPanel() {
 
   function handleResults(results) {
     if (!results?.length) { alert('视频处理完成，但未检出任何帧'); return }
-    const s = { total: 0, defects: 0, crack: 0, pothole: 0 }
+    const st = { total: 0, defects: 0, crack: 0, pothole: 0 }
     results.forEach(item => {
-      s.total++
-      if (item.detections.length > 0) s.defects++
-      if (item.detections.some(d => d.tag === 'tag-crack'))   s.crack++
-      if (item.detections.some(d => d.tag === 'tag-pothole')) s.pothole++
+      st.total++
+      st.defects += item.detections.length
+      item.detections.forEach(d => {
+        if (['D00', 'D10', 'D20'].includes(d.label)) st.crack++
+        else if (d.label === 'D40') st.pothole++
+      })
     })
-    setItems(results); setStats(s)
+    setItems(results); setStats(st)
   }
 
   return (
