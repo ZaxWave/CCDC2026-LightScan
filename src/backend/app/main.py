@@ -17,6 +17,7 @@ from app.api.v1.detect_video import router as detect_video_router
 from app.api.v1.gis import router as gis_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
+from app.api.v1.report import router as report_router
 
 from .db.database import engine
 from .db import models
@@ -56,6 +57,7 @@ app.add_middleware(
 # ── API 路由（必须在静态文件挂载之前注册）───────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(report_router)
 app.include_router(detect_router)
 app.include_router(detect_video_router)
 app.include_router(gis_router)

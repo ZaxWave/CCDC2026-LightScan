@@ -46,6 +46,23 @@
   color: #b0b0b0;
 }
 
+.reportBtn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 16px;
+  background: #3E6AE1;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #fff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.reportBtn:hover { background: #3260d0; }
+
 .exportBtn {
   display: flex;
   align-items: center;
@@ -54,7 +71,7 @@
   padding: 0 14px;
   background: transparent;
   border: 1px solid #e0e0e0;
-  border-bottom: 1px solid #c8c8c8; /* 轻微层次 */
+  border-bottom: 1px solid #c8c8c8;
   border-radius: 3px;
   font-size: 12px;
   font-weight: 500;
