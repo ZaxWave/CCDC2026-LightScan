@@ -1,12 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import s from './UserMenu.module.css';
-import { getMyProfile, changePassword } from '../api/client';
+import { getMyProfile, changePassword, updateProfile } from '../api/client';
 
 // 固定品牌蓝渐变
 function avatarGradient() {
   return ['#3E6AE1', '#60a5fa'];
 }
 
+const IconEdit = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+  </svg>
+);
 const IconRecords = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/>
@@ -38,6 +44,10 @@ export default function UserMenu({ onLogout, onNavigate }) {
   const [pwForm, setPwForm]   = useState({ old: '', new1: '', new2: '' });
   const [pwStatus, setPwStatus] = useState({ type: '', msg: '' });
   const [pwLoading, setPwLoading] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editForm, setEditForm] = useState({ nickname: '', unit: '' });
+  const [editStatus, setEditStatus] = useState({ type: '', msg: '' });
+  const [editLoading, setEditLoading] = useState(false);
   const ref = useRef(null);
 
   const username  = localStorage.getItem('username') || '用户';
@@ -55,10 +65,28 @@ export default function UserMenu({ onLogout, onNavigate }) {
 
   // 面板打开时拉取个人信息
   useEffect(() => {
-    if (open && !profile) getMyProfile().then(setProfile).catch(() => {});
+    if (open && !profile) getMyProfile().then(p => {
+      setProfile(p);
+      setEditForm({ nickname: p.nickname || '', unit: p.unit || '' });
+    }).catch(() => {});
   }, [open]);
 
   const handleLogout = () => { setOpen(false); onLogout?.(); };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    setEditLoading(true);
+    try {
+      const updated = await updateProfile({ nickname: editForm.nickname, unit: editForm.unit });
+      setProfile(prev => ({ ...prev, nickname: updated.nickname, unit: updated.unit }));
+      setEditStatus({ type: 'ok', msg: '资料已更新' });
+      setTimeout(() => { setShowEdit(false); setEditStatus({ type: '', msg: '' }); }, 1500);
+    } catch (err) {
+      setEditStatus({ type: 'err', msg: err.message });
+    } finally {
+      setEditLoading(false);
+    }
+  };
 
   const handlePwSubmit = async (e) => {
     e.preventDefault();
@@ -109,7 +137,8 @@ export default function UserMenu({ onLogout, onNavigate }) {
               {initial}
             </div>
             <div className={s.userInfo}>
-              <div className={s.username}>{username}</div>
+              <div className={s.username}>{profile?.nickname || username}</div>
+              {profile?.unit && <div className={s.unitLine}>{profile.unit}</div>}
               <div className={s.roleLine}>
                 <span className={s.roleTag}>{profile?.role === 'admin' ? '管理员' : '检测员'}</span>
                 {loginDisplay && <span className={s.loginTime}>{loginDisplay} 登录</span>}
@@ -150,6 +179,17 @@ export default function UserMenu({ onLogout, onNavigate }) {
               <span className={s.chevron}><IconChevron /></span>
             </button>
 
+            <button className={s.menuItem} onClick={() => { setShowEdit(p => !p); setEditStatus({ type: '', msg: '' }); }}>
+              <span className={s.menuIcon} style={{ color: '#1a8045' }}><IconEdit /></span>
+              <div className={s.menuText}>
+                <span className={s.menuLabel}>编辑资料</span>
+                <span className={s.menuSub}>修改昵称与所属单位</span>
+              </div>
+              <span className={s.chevron} style={{ transform: showEdit ? 'rotate(-90deg)' : 'rotate(90deg)', transition: 'transform 0.2s', display: 'flex' }}>
+                <IconChevron />
+              </span>
+            </button>
+
             <button className={s.menuItem} onClick={() => { setShowPw(p => !p); setPwStatus({ type: '', msg: '' }); }}>
               <span className={s.menuIcon} style={{ color: '#7c3aed' }}><IconLock /></span>
               <div className={s.menuText}>
@@ -161,6 +201,41 @@ export default function UserMenu({ onLogout, onNavigate }) {
               </span>
             </button>
           </div>
+
+          {/* ── 资料编辑表单 ─── */}
+          {showEdit && (
+            <div className={s.pwSection} style={{ borderLeftColor: '#1a8045' }}>
+              <form className={s.pwForm} onSubmit={handleEditSubmit}>
+                <div>
+                  <label className={s.pwLabel}>昵称</label>
+                  <input
+                    className={s.pwInput}
+                    type="text"
+                    placeholder="显示名称（可选）"
+                    value={editForm.nickname}
+                    onChange={e => setEditForm(p => ({ ...p, nickname: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={s.pwLabel}>所属单位</label>
+                  <input
+                    className={s.pwInput}
+                    type="text"
+                    placeholder="部门或单位名称（可选）"
+                    value={editForm.unit}
+                    onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                  />
+                </div>
+                {editStatus.msg && (
+                  <div className={editStatus.type === 'ok' ? s.pwOk : s.pwErr}>{editStatus.msg}</div>
+                )}
+                <button type="submit" className={s.pwSubmit} disabled={editLoading}
+                  style={{ background: '#1a8045' }}>
+                  {editLoading ? '保存中...' : '保存资料'}
+                </button>
+              </form>
+            </div>
+          )}
 
           {/* ── 密码修改表单 ─── */}
           {showPw && (

@@ -78,3 +78,15 @@ export function getMyStats() {
 export function generateWeeklyReport() {
   return request('/api/v1/report/weekly', {}, 'POST');
 }
+export function updateProfile(data) {
+  return request('/api/v1/users/me', data, 'PATCH');
+}
+export function getDeletedRecords() {
+  return request('/api/v1/gis/deleted-records', null, 'GET');
+}
+export function restoreRecord(id) {
+  return request(`/api/v1/gis/records/${id}/restore`, {}, 'POST');
+}
+export function batchDeleteRecords(ids) {
+  return request('/api/v1/gis/records/batch-delete', { ids }, 'POST');
+}

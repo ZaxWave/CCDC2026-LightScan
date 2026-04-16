@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { getMyGisRecords, deleteRecord, getMyStats } from '../api/client';
+import { getMyGisRecords, deleteRecord, getMyStats, getDeletedRecords, restoreRecord, batchDeleteRecords } from '../api/client';
 import WeeklyReportModal from '../components/WeeklyReportModal';
 import s from './MyRecordsPanel.module.css';
 
@@ -89,22 +89,53 @@ const IconReport = () => (
 
 // ─────────────────────────────────────────────────────────────
 export default function MyRecordsPanel() {
-  const [records, setRecords] = useState([]);
-  const [stats,   setStats]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [filter,  setFilter]  = useState('全部');
+  const [records,  setRecords]  = useState([]);
+  const [stats,    setStats]    = useState(null);
+  const [loading,  setLoading]  = useState(true);
+  const [filter,   setFilter]   = useState('全部');
   const [deleteId, setDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
-  const [page, setPage] = useState(0);
+  const [page,     setPage]     = useState(0);
   const [showReport, setShowReport] = useState(false);
+
+  // 批量选择
+  const [selected, setSelected] = useState(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
+  const [showBatchConfirm, setShowBatchConfirm] = useState(false);
+
+  // 回收站
+  const [showTrash, setShowTrash]   = useState(false);
+  const [trashRecs, setTrashRecs]   = useState([]);
+  const [trashLoad, setTrashLoad]   = useState(false);
+  const [restoring, setRestoring]   = useState(null);
+
   const PAGE_SIZE = 12;
 
-  useEffect(() => {
+  const loadActive = () =>
     Promise.all([
       getMyGisRecords().then(setRecords),
       getMyStats().then(setStats),
     ]).finally(() => setLoading(false));
-  }, []);
+
+  useEffect(() => { loadActive(); }, []);
+
+  const openTrash = () => {
+    setShowTrash(true);
+    setTrashLoad(true);
+    getDeletedRecords().then(setTrashRecs).finally(() => setTrashLoad(false));
+  };
+
+  const handleRestore = async (id) => {
+    setRestoring(id);
+    try {
+      await restoreRecord(id);
+      setTrashRecs(prev => prev.filter(r => r.id !== id));
+      // refresh active list
+      getMyGisRecords().then(setRecords);
+      getMyStats().then(setStats);
+    } catch (e) { alert(e.message); }
+    finally { setRestoring(null); }
+  };
 
   const filtered = useMemo(() => {
     if (filter === '全部') return records;
@@ -114,14 +145,43 @@ export default function MyRecordsPanel() {
   const paged      = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
 
+  // 单条删除
   const handleDelete = async () => {
     setDeleting(true);
     try {
       await deleteRecord(deleteId);
       setRecords(prev => prev.filter(r => r.id !== deleteId));
+      setSelected(prev => { const s = new Set(prev); s.delete(deleteId); return s; });
     } catch (e) { alert(e.message); }
     finally { setDeleting(false); setDeleteId(null); }
   };
+
+  // 批量删除
+  const handleBatchDelete = async () => {
+    setBatchDeleting(true);
+    try {
+      await batchDeleteRecords([...selected]);
+      setRecords(prev => prev.filter(r => !selected.has(r.id)));
+      setSelected(new Set());
+    } catch (e) { alert(e.message); }
+    finally { setBatchDeleting(false); setShowBatchConfirm(false); }
+  };
+
+  // 全选/取消
+  const allPageIds  = paged.map(r => r.id);
+  const allSelected = allPageIds.length > 0 && allPageIds.every(id => selected.has(id));
+  const toggleAll   = () => {
+    if (allSelected) {
+      setSelected(prev => { const s = new Set(prev); allPageIds.forEach(id => s.delete(id)); return s; });
+    } else {
+      setSelected(prev => { const s = new Set(prev); allPageIds.forEach(id => s.add(id)); return s; });
+    }
+  };
+  const toggleOne = (id) => setSelected(prev => {
+    const s = new Set(prev);
+    s.has(id) ? s.delete(id) : s.add(id);
+    return s;
+  });
 
   const weekTotal  = stats?.daily?.reduce((a, d) => a + d.count, 0) ?? 0;
   const todayCount = stats?.daily?.at(-1)?.count ?? 0;
@@ -136,14 +196,17 @@ export default function MyRecordsPanel() {
           <div className={s.pageSub}>仅显示本账户上传的检测数据，支持管理与导出</div>
         </div>
         <div className={s.exportGroup}>
+          <button className={s.trashBtn} onClick={openTrash}>
+            回收站
+          </button>
           <button className={s.reportBtn} onClick={() => setShowReport(true)}>
             <IconReport /> 生成巡检周报
           </button>
           <span className={s.exportLabel}>导出</span>
-          <button className={s.exportBtn} onClick={() => exportCSV(filtered)}>
+          <button className={s.exportBtn} onClick={() => exportCSV(selected.size > 0 ? filtered.filter(r => selected.has(r.id)) : filtered)}>
             <IconDownload /> CSV
           </button>
-          <button className={s.exportBtn} onClick={() => exportGeoJSON(filtered)}>
+          <button className={s.exportBtn} onClick={() => exportGeoJSON(selected.size > 0 ? filtered.filter(r => selected.has(r.id)) : filtered)}>
             <IconDownload /> GeoJSON
           </button>
         </div>
@@ -171,12 +234,19 @@ export default function MyRecordsPanel() {
           <button
             key={l}
             className={`${s.filterBtn} ${filter === l ? s.filterActive : ''}`}
-            onClick={() => { setFilter(l); setPage(0); }}
+            onClick={() => { setFilter(l); setPage(0); setSelected(new Set()); }}
           >
             {l}
           </button>
         ))}
         <span className={s.filterCount}>{filtered.length} 条记录</span>
+        {selected.size > 0 && (
+          <span className={s.batchBar}>
+            已选 {selected.size} 条
+            <button className={s.batchDelBtn} onClick={() => setShowBatchConfirm(true)}>批量删除</button>
+            <button className={s.batchClrBtn} onClick={() => setSelected(new Set())}>取消选择</button>
+          </span>
+        )}
       </div>
 
       {/* ── 表格 ── */}
@@ -192,13 +262,19 @@ export default function MyRecordsPanel() {
           <table className={s.table}>
             <thead>
               <tr>
+                <th style={{ width: 36 }}>
+                  <input type="checkbox" checked={allSelected} onChange={toggleAll} className={s.chk} />
+                </th>
                 <th>ID</th><th>病害类型</th><th>置信度</th>
                 <th>经纬度</th><th>来源文件</th><th>检测时间</th><th></th>
               </tr>
             </thead>
             <tbody>
               {paged.map(r => (
-                <tr key={r.id} className={s.row}>
+                <tr key={r.id} className={`${s.row} ${selected.has(r.id) ? s.rowSelected : ''}`}>
+                  <td>
+                    <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleOne(r.id)} className={s.chk} />
+                  </td>
                   <td className={s.idCell}>#{r.id}</td>
                   <td>
                     <span
@@ -247,18 +323,89 @@ export default function MyRecordsPanel() {
       {/* ── 周报 Modal ── */}
       {showReport && <WeeklyReportModal onClose={() => setShowReport(false)} />}
 
-      {/* ── 删除确认 ── */}
+      {/* ── 单条删除确认 ── */}
       {deleteId && (
         <div className={s.overlay} onClick={() => setDeleteId(null)}>
           <div className={s.modal} onClick={e => e.stopPropagation()}>
-            <div className={s.modalTitle}>确认删除记录 #{deleteId}？</div>
-            <div className={s.modalSub}>此操作不可撤销，该检测记录将从系统中永久移除。</div>
+            <div className={s.modalTitle}>移入回收站？</div>
+            <div className={s.modalSub}>记录 #{deleteId} 将移入回收站，7 天内可随时恢复。</div>
             <div className={s.modalActions}>
               <button className={s.modalCancel} onClick={() => setDeleteId(null)}>取消</button>
               <button className={s.modalConfirm} onClick={handleDelete} disabled={deleting}>
-                {deleting ? '删除中...' : '确认删除'}
+                {deleting ? '处理中...' : '确认移除'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 批量删除确认 ── */}
+      {showBatchConfirm && (
+        <div className={s.overlay} onClick={() => setShowBatchConfirm(false)}>
+          <div className={s.modal} onClick={e => e.stopPropagation()}>
+            <div className={s.modalTitle}>批量移入回收站？</div>
+            <div className={s.modalSub}>已选 {selected.size} 条记录将移入回收站，7 天内可恢复。</div>
+            <div className={s.modalActions}>
+              <button className={s.modalCancel} onClick={() => setShowBatchConfirm(false)}>取消</button>
+              <button className={s.modalConfirm} onClick={handleBatchDelete} disabled={batchDeleting}>
+                {batchDeleting ? '处理中...' : `确认删除 ${selected.size} 条`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── 回收站面板 ── */}
+      {showTrash && (
+        <div className={s.overlay} onClick={() => setShowTrash(false)}>
+          <div className={s.trashModal} onClick={e => e.stopPropagation()}>
+            <div className={s.trashHeader}>
+              <div>
+                <div className={s.trashTitle}>回收站</div>
+                <div className={s.trashSub}>软删除记录将在 7 天后自动清除</div>
+              </div>
+              <button className={s.modalCancel} style={{ width: 60 }} onClick={() => setShowTrash(false)}>关闭</button>
+            </div>
+            {trashLoad ? (
+              <div className={s.loading}>加载中...</div>
+            ) : trashRecs.length === 0 ? (
+              <div className={s.empty} style={{ padding: '40px 0' }}>回收站为空</div>
+            ) : (
+              <div className={s.tableWrap} style={{ border: 'none', borderTop: '1px solid #ebebeb' }}>
+                <table className={s.table}>
+                  <thead>
+                    <tr>
+                      <th>ID</th><th>病害类型</th><th>删除时间</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {trashRecs.map(r => (
+                      <tr key={r.id} className={s.row}>
+                        <td className={s.idCell}>#{r.id}</td>
+                        <td>
+                          <span className={s.labelTag}
+                            style={{ color: r.color_hex || '#3E6AE1', borderColor: (r.color_hex || '#3E6AE1') + '60', background: (r.color_hex || '#3E6AE1') + '0d' }}>
+                            {r.label_cn || r.label || '—'}
+                          </span>
+                        </td>
+                        <td className={s.timeCell}>
+                          {r.deleted_at ? new Date(r.deleted_at).toLocaleString('zh-CN', { hour12: false }) : '—'}
+                        </td>
+                        <td>
+                          <button
+                            className={s.restoreBtn}
+                            onClick={() => handleRestore(r.id)}
+                            disabled={restoring === r.id}
+                          >
+                            {restoring === r.id ? '恢复中...' : '恢复'}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

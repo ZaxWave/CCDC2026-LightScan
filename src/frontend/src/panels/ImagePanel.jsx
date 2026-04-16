@@ -5,6 +5,7 @@ import ProgressBar from '../components/ProgressBar'
 import StatsRow from '../components/StatsRow'
 import ResultsGrid from '../components/ResultsGrid'
 import { detectImages } from '../api/client'
+import { useToast } from '../context/ToastContext'
 
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/bmp']
 
@@ -12,6 +13,7 @@ export default function ImagePanel() {
   const [items, setItems] = useState([])
   const [stats, setStats] = useState(null)
   const [progress, setProgress] = useState({ visible: false, text: '', pct: 0 })
+  const toast = useToast()
 
   async function handleFiles(files) {
     const images = files.filter(f => ALLOWED.includes(f.type))
@@ -35,16 +37,23 @@ export default function ImagePanel() {
 
       newStats.defects += item.detections.length
       
+      let hasD40 = false
       item.detections.forEach(d => {
-        // 纵裂(D00)、横裂(D10)、龟裂(D20) 全部归类为“裂缝”
+        // 纵裂(D00)、横裂(D10)、龟裂(D20) 全部归类为”裂缝”
         if (['D00', 'D10', 'D20'].includes(d.label)) {
           newStats.crack++
-        } 
-        // D40 独立计算为“坑槽”
+        }
+        // D40 独立计算为”坑槽”
         else if (d.label === 'D40') {
           newStats.pothole++
+          hasD40 = true
         }
       })
+      if (hasD40) {
+        toast(`⚠ 高风险病害：检测到坑槽（D40），置信度 ${
+          (item.detections.find(d => d.label === 'D40')?.confidence * 100 || 0).toFixed(1)
+        }%，请及时处置！`, 'danger', 6000)
+      }
 
       setStats({ ...newStats })
       await new Promise(r => setTimeout(r, 40))

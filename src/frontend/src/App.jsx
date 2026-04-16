@@ -8,6 +8,7 @@ import VideoPanel from './panels/VideoPanel'
 import MapPanel from './panels/MapPanel'
 import MyRecordsPanel from './panels/MyRecordsPanel'
 import LoginPanel from './panels/LoginPanel'
+import { ToastProvider } from './context/ToastContext'
 
 // 全屏面板（无 Hero、无 Footer）
 const FULLSCREEN_TABS = ['map'];
@@ -30,7 +31,7 @@ export default function App() {
   const isFullscreen = FULLSCREEN_TABS.includes(tab);
 
   return (
-    <>
+    <ToastProvider>
       <Nav onBackToDetect={() => setTab('image')} onLogout={handleLogout} onTabChange={setTab} />
 
       {!isFullscreen && (
@@ -60,6 +61,6 @@ export default function App() {
           © 2026 LightScan Team · 第19届中国大学生计算机设计大赛
         </footer>
       )}
-    </>
+    </ToastProvider>
   )
 }

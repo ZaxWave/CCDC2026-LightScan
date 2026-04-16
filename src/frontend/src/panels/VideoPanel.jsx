@@ -4,12 +4,14 @@ import UploadArea from '../components/UploadArea'
 import StatsRow from '../components/StatsRow'
 import ResultsGrid from '../components/ResultsGrid'
 import VideoDetectModal from '../components/video/VideoDetectModal'
+import { useToast } from '../context/ToastContext'
 
 export default function VideoPanel() {
   const [file, setFile] = useState(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [items, setItems] = useState([])
   const [stats, setStats] = useState(null)
+  const toast = useToast()
 
   function handleFiles(files) {
     const video = files.find(f => f.type === 'video/mp4')
@@ -29,6 +31,9 @@ export default function VideoPanel() {
       })
     })
     setItems(results); setStats(st)
+    if (st.pothole > 0) {
+      toast(`⚠ 高风险病害：视频中共检出 ${st.pothole} 处坑槽（D40），请及时安排处置！`, 'danger', 8000)
+    }
   }
 
   return (

@@ -89,6 +89,7 @@
 }
 
 .loginTime { font-size: 11px; color: #9ca3af; }
+.unitLine  { font-size: 11px; color: #9ca3af; margin-bottom: 1px; }
 
 /* ── 统计行 ───────────────────────────────────────────────── */
 .statsRow {

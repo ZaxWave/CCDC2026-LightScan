@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import DiseaseRecord, User
-from app.schemas.user import PasswordChange, UserProfile
+from app.schemas.user import PasswordChange, UserProfile, UserUpdate
 from app.core.security import get_password_hash, verify_password
 from app.api.deps import get_current_user
 
@@ -35,6 +35,39 @@ def get_my_profile(
         is_active=current_user.is_active,
         created_at=current_user.created_at,
         record_count=record_count,
+        nickname=current_user.nickname,
+        unit=current_user.unit,
+    )
+
+
+@router.patch("/me", response_model=UserProfile)
+def update_my_profile(
+    body: UserUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """修改个人资料（昵称、单位）"""
+    if body.nickname is not None:
+        current_user.nickname = body.nickname.strip() or None
+    if body.unit is not None:
+        current_user.unit = body.unit.strip() or None
+    db.commit()
+    db.refresh(current_user)
+    record_count = (
+        db.query(func.count(DiseaseRecord.id))
+        .filter(DiseaseRecord.creator_id == current_user.id)
+        .scalar()
+        or 0
+    )
+    return UserProfile(
+        id=current_user.id,
+        username=current_user.username,
+        role=current_user.role,
+        is_active=current_user.is_active,
+        created_at=current_user.created_at,
+        record_count=record_count,
+        nickname=current_user.nickname,
+        unit=current_user.unit,
     )
 
 

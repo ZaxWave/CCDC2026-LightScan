@@ -10,11 +10,12 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    role = Column(String, default="worker")  # 角色：'admin' 或 'worker'
+    role = Column(String, default="worker")
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=True)
+    nickname = Column(String, nullable=True)   # 显示昵称（可选）
+    unit = Column(String, nullable=True)        # 所属单位
 
-    # 建立一对多关联：一个用户对应多条检测记录
     records = relationship("DiseaseRecord", back_populates="creator")
 
 class DiseaseRecord(Base):
@@ -30,6 +31,9 @@ class DiseaseRecord(Base):
     color_hex = Column(String)
     bbox = Column(JSONB)
 
-    # 新增外键和反向关联
+    # 软删除：记录进入回收站的时间，NULL 表示正常
+    deleted_at = Column(DateTime, nullable=True, default=None)
+
+    # 外键和反向关联
     creator_id = Column(Integer, ForeignKey("users.id"), index=True)
     creator = relationship("User", back_populates="records")

@@ -15,6 +15,7 @@ class DiseaseRecordOut(BaseModel):
     confidence: Optional[float] = None
     color_hex: Optional[str] = None
     bbox: Optional[Any] = None
+    deleted_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
