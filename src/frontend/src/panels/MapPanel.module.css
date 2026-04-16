@@ -34,14 +34,14 @@
   margin: 0 4px;
 }
 
+/* --- 修改：去圆角、控制层级基准 --- */
 .mapWrapper {
   flex: 1;
-  border-radius: 12px;
+  border-radius: 0; 
   overflow: hidden;
   border: 1px solid var(--border, #e5e7eb);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
   position: relative;
-  z-index: 1; /* 防止层级遮挡 */
+  z-index: 1; 
 }
 
 .map {
@@ -85,12 +85,66 @@
   color: #374151;
 }
 
+/* --- 新增/修改：侧边栏与展开按钮的层级联动 --- */
 .sidebar {
-  transform: translateX(0);
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 340px;
+  background: #fff;
+  z-index: 1000;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border-right: 1px solid var(--border);
 }
 
 .sidebarClosed {
   transform: translateX(-340px); 
+}
+
+/* 独立的切换按钮基础样式 */
+.toggleBtn {
+  position: absolute;
+  top: 20px;
+  z-index: 1001; /* 保证浮在最高层 */
+  width: 24px;
+  height: 48px;
+  background: #fff;
+  border: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  color: var(--muted);
+  
+  /* 关键：使用 left 属性做动画，而不是跟着侧边栏 transform */
+  transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 侧边栏打开时，按钮被推到 340px 的位置 */
+.btnOpen {
+  left: 340px; 
+  border-left: none;
+  border-radius: 0 4px 4px 0;
+}
+
+/* 侧边栏收起时，按钮回到最左侧 0 的位置 */
+.btnClosed {
+  left: 0; 
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0 4px 4px 0;
+}
+
+.toggleBtn:hover {
+  color: var(--primary);
+  background: #f8f9fa;
+}
+
+.sidebarClosed .toggleBtn {
+  left: 0;
+  border-left: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
 }
 
 .sidebar button:hover {

@@ -350,7 +350,7 @@ export default function MapPanel() {
       {/* 可收起的数据仪表盘 */}
       <div style={{
         position: 'absolute', top: '20px', bottom: '20px',
-        left: isSidebarOpen ? '20px' : '-340px', width: '316px',
+        left: isSidebarOpen ? '20px' : '-316px', width: '316px',
         background: 'rgba(8, 11, 20, 0.92)', backdropFilter: 'blur(16px)',
         borderTop: '2px solid #3E6AE1',
         border: '1px solid rgba(255,255,255,0.07)',
