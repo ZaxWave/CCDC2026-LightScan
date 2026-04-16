@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getMyGisRecords, deleteRecord, getMyStats } from '../api/client';
+import WeeklyReportModal from '../components/WeeklyReportModal';
 import s from './MyRecordsPanel.module.css';
 
 const LABELS = ['全部', '坑槽', '纵横裂缝', '网状裂缝', '横向裂缝'];
@@ -80,6 +81,11 @@ const IconDownload = () => (
     <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
   </svg>
 );
+const IconReport = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+  </svg>
+);
 
 // ─────────────────────────────────────────────────────────────
 export default function MyRecordsPanel() {
@@ -90,6 +96,7 @@ export default function MyRecordsPanel() {
   const [deleteId, setDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [page, setPage] = useState(0);
+  const [showReport, setShowReport] = useState(false);
   const PAGE_SIZE = 12;
 
   useEffect(() => {
@@ -129,6 +136,9 @@ export default function MyRecordsPanel() {
           <div className={s.pageSub}>仅显示本账户上传的检测数据，支持管理与导出</div>
         </div>
         <div className={s.exportGroup}>
+          <button className={s.reportBtn} onClick={() => setShowReport(true)}>
+            <IconReport /> 生成巡检周报
+          </button>
           <span className={s.exportLabel}>导出</span>
           <button className={s.exportBtn} onClick={() => exportCSV(filtered)}>
             <IconDownload /> CSV
@@ -233,6 +243,9 @@ export default function MyRecordsPanel() {
           <button className={s.pageBtn} disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>»</button>
         </div>
       )}
+
+      {/* ── 周报 Modal ── */}
+      {showReport && <WeeklyReportModal onClose={() => setShowReport(false)} />}
 
       {/* ── 删除确认 ── */}
       {deleteId && (

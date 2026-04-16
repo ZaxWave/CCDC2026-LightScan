@@ -75,3 +75,6 @@ export function changePassword(old_password, new_password) {
 export function getMyStats() {
   return request('/api/v1/gis/my-stats', null, 'GET');
 }
+export function generateWeeklyReport() {
+  return request('/api/v1/report/weekly', {}, 'POST');
+}
