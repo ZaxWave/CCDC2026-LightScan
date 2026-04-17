@@ -45,7 +45,7 @@ export default function UserMenu({ onLogout, onNavigate }) {
   const [pwStatus, setPwStatus] = useState({ type: '', msg: '' });
   const [pwLoading, setPwLoading] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
-  const [editForm, setEditForm] = useState({ nickname: '', unit: '' });
+  const [editForm, setEditForm] = useState({ nickname: '', unit: '', source_type: 'manual', device_id: '' });
   const [editStatus, setEditStatus] = useState({ type: '', msg: '' });
   const [editLoading, setEditLoading] = useState(false);
   const ref = useRef(null);
@@ -67,7 +67,7 @@ export default function UserMenu({ onLogout, onNavigate }) {
   useEffect(() => {
     if (open && !profile) getMyProfile().then(p => {
       setProfile(p);
-      setEditForm({ nickname: p.nickname || '', unit: p.unit || '' });
+      setEditForm({ nickname: p.nickname || '', unit: p.unit || '', source_type: p.source_type || 'manual', device_id: p.device_id || '' });
     }).catch(() => {});
   }, [open]);
 
@@ -77,8 +77,8 @@ export default function UserMenu({ onLogout, onNavigate }) {
     e.preventDefault();
     setEditLoading(true);
     try {
-      const updated = await updateProfile({ nickname: editForm.nickname, unit: editForm.unit });
-      setProfile(prev => ({ ...prev, nickname: updated.nickname, unit: updated.unit }));
+      const updated = await updateProfile({ nickname: editForm.nickname, unit: editForm.unit, source_type: editForm.source_type, device_id: editForm.device_id });
+      setProfile(prev => ({ ...prev, nickname: updated.nickname, unit: updated.unit, source_type: updated.source_type, device_id: updated.device_id }));
       setEditStatus({ type: 'ok', msg: '资料已更新' });
       setTimeout(() => { setShowEdit(false); setEditStatus({ type: '', msg: '' }); }, 1500);
     } catch (err) {
@@ -224,6 +224,30 @@ export default function UserMenu({ onLogout, onNavigate }) {
                     placeholder="部门或单位名称（可选）"
                     value={editForm.unit}
                     onChange={e => setEditForm(p => ({ ...p, unit: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className={s.pwLabel}>数据来源</label>
+                  <select
+                    className={s.pwInput}
+                    value={editForm.source_type}
+                    onChange={e => setEditForm(p => ({ ...p, source_type: e.target.value }))}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <option value="manual">人工巡检</option>
+                    <option value="bus_dashcam">公交记录仪</option>
+                    <option value="street_camera">路侧监控</option>
+                    <option value="drone">无人机</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={s.pwLabel}>设备编号</label>
+                  <input
+                    className={s.pwInput}
+                    type="text"
+                    placeholder="设备 ID（可选，如 BUS-001）"
+                    value={editForm.device_id}
+                    onChange={e => setEditForm(p => ({ ...p, device_id: e.target.value }))}
                   />
                 </div>
                 {editStatus.msg && (

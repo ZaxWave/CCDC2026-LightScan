@@ -1,8 +1,9 @@
 import math
+import base64
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, File, Form, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -45,15 +46,17 @@ def get_records(
 
 
 @router.patch("/records/{record_id}/status", response_model=DiseaseRecordOut)
-def update_record_status(
+async def update_record_status(
     record_id: int,
-    body: StatusUpdateBody,
+    status: str = Form(...),
+    worker_name: Optional[str] = Form(None),
+    repaired_image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """更新工单流转状态（待修/维修中/已修）- 仅限记录创建者或管理员"""
+    """更新工单流转状态；status=repaired 时可附上修后照片。"""
     _valid = {"pending", "processing", "repaired"}
-    if body.status not in _valid:
+    if status not in _valid:
         raise HTTPException(status_code=400, detail=f"无效状态值，可选：{_valid}")
 
     record = db.query(DiseaseRecord).filter(
@@ -65,9 +68,17 @@ def update_record_status(
     if record.creator_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="无权修改他人的记录")
 
-    record.status = body.status
-    if body.worker_name is not None:
-        record.worker_name = body.worker_name
+    record.status = status
+    if worker_name is not None:
+        record.worker_name = worker_name
+
+    if status == "repaired":
+        record.repaired_at = datetime.utcnow()
+        if repaired_image:
+            img_bytes = await repaired_image.read()
+            mime = repaired_image.content_type or "image/jpeg"
+            record.repaired_image_b64 = f"data:{mime};base64," + base64.b64encode(img_bytes).decode()
+
     db.commit()
     db.refresh(record)
     return record
@@ -302,6 +313,28 @@ def get_cluster_timeline(
         "trend":     trend,
         "timeline":  timeline,
     }
+
+
+@router.get("/source-stats")
+def get_source_stats(db: Session = Depends(get_db)):
+    """返回各数据来源的记录数量，用于大屏来源分布图。"""
+    SOURCE_LABEL = {
+        "bus_dashcam":    "公交记录仪",
+        "street_camera":  "路侧监控",
+        "drone":          "无人机",
+        "manual":         "人工巡检",
+    }
+    rows = (
+        db.query(DiseaseRecord.source_type, func.count(DiseaseRecord.id))
+        .filter(DiseaseRecord.deleted_at == None)
+        .group_by(DiseaseRecord.source_type)
+        .all()
+    )
+    result = []
+    for src, cnt in rows:
+        key = src or "manual"
+        result.append({"source_type": key, "label": SOURCE_LABEL.get(key, key), "count": cnt})
+    return result
 
 
 @router.get("/stats", response_model=StatsOut)

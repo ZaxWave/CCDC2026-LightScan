@@ -37,6 +37,8 @@ def get_my_profile(
         record_count=record_count,
         nickname=current_user.nickname,
         unit=current_user.unit,
+        source_type=current_user.source_type,
+        device_id=current_user.device_id,
     )
 
 
@@ -51,6 +53,10 @@ def update_my_profile(
         current_user.nickname = body.nickname.strip() or None
     if body.unit is not None:
         current_user.unit = body.unit.strip() or None
+    if body.source_type is not None:
+        current_user.source_type = body.source_type or "manual"
+    if body.device_id is not None:
+        current_user.device_id = body.device_id.strip() or None
     db.commit()
     db.refresh(current_user)
     record_count = (
@@ -68,6 +74,8 @@ def update_my_profile(
         record_count=record_count,
         nickname=current_user.nickname,
         unit=current_user.unit,
+        source_type=current_user.source_type,
+        device_id=current_user.device_id,
     )
 
 

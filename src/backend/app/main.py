@@ -40,13 +40,26 @@ def _migrate_disease_records():
                     "ALTER TABLE disease_records ADD COLUMN worker_name VARCHAR"
                 ))
             if "cluster_id" not in cols:
-                conn.execute(text(
-                    "ALTER TABLE disease_records ADD COLUMN cluster_id VARCHAR"
-                ))
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN cluster_id VARCHAR"))
             if "feature_vector" not in cols:
-                conn.execute(text(
-                    "ALTER TABLE disease_records ADD COLUMN feature_vector JSONB"
-                ))
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN feature_vector JSONB"))
+            if "source_type" not in cols:
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN source_type VARCHAR"))
+            if "device_id" not in cols:
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN device_id VARCHAR"))
+            if "repaired_image_b64" not in cols:
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN repaired_image_b64 TEXT"))
+            if "repaired_at" not in cols:
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN repaired_at TIMESTAMP"))
+            conn.commit()
+
+        # users 表补充设备字段
+        user_cols = {c["name"] for c in inspect(engine).get_columns("users")}
+        with engine.connect() as conn:
+            if "source_type" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN source_type VARCHAR DEFAULT 'manual'"))
+            if "device_id" not in user_cols:
+                conn.execute(text("ALTER TABLE users ADD COLUMN device_id VARCHAR"))
             conn.commit()
     except Exception as e:
         warnings.warn(f"⚠️ DB migration warning: {e}", RuntimeWarning)

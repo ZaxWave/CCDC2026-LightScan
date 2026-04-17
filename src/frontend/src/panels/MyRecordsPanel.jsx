@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { getMyGisRecords, deleteRecord, getMyStats, getDeletedRecords, restoreRecord, batchDeleteRecords, updateRecordStatus } from '../api/client';
 import WeeklyReportModal from '../components/WeeklyReportModal';
 import s from './MyRecordsPanel.module.css';
@@ -23,7 +23,7 @@ function StatusBadge({ status }) {
   );
 }
 
-const LABELS = ['全部', '坑槽', '纵横裂缝', '网状裂缝', '横向裂缝'];
+const LABELS = ['全部', '坑槽', '纵向裂缝', '龟裂', '横向裂缝'];
 
 function confColor(v) {
   if (v >= 0.8) return '#3E6AE1';
@@ -127,6 +127,9 @@ export default function MyRecordsPanel() {
   const [statusModal,    setStatusModal]    = useState(null); // record being updated
   const [statusValue,    setStatusValue]    = useState('pending');
   const [workerValue,    setWorkerValue]    = useState('');
+  const [repairFile,     setRepairFile]     = useState(null);
+  const [repairPreview,  setRepairPreview]  = useState(null);
+  const repairInputRef = useRef(null);
   const [statusUpdating, setStatusUpdating] = useState(false);
 
   // 回收站
@@ -134,6 +137,14 @@ export default function MyRecordsPanel() {
   const [trashRecs, setTrashRecs]   = useState([]);
   const [trashLoad, setTrashLoad]   = useState(false);
   const [restoring, setRestoring]   = useState(null);
+
+  // 修复照片预览 URL 管理
+  useEffect(() => {
+    if (!repairFile) { setRepairPreview(null); return; }
+    const url = URL.createObjectURL(repairFile);
+    setRepairPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [repairFile]);
 
   const PAGE_SIZE = 12;
 
@@ -149,19 +160,26 @@ export default function MyRecordsPanel() {
     setStatusModal(record);
     setStatusValue(record.status || 'pending');
     setWorkerValue(record.worker_name || '');
+    setRepairFile(null);
   };
 
   const handleStatusUpdate = async () => {
     if (!statusModal) return;
+    if (statusValue === 'repaired' && !repairFile) {
+      alert('修复完成时需上传修补后的路面照片');
+      return;
+    }
     setStatusUpdating(true);
     try {
       const updated = await updateRecordStatus(
         statusModal.id,
         statusValue,
         workerValue.trim() || null,
+        repairFile || null,
       );
       setRecords(prev => prev.map(r => r.id === updated.id ? updated : r));
       setStatusModal(null);
+      setRepairFile(null);
     } catch (e) { alert(e.message); }
     finally { setStatusUpdating(false); }
   };
@@ -372,7 +390,7 @@ export default function MyRecordsPanel() {
 
       {/* ── 状态更新 Modal ── */}
       {statusModal && (
-        <div className={s.overlay} onClick={() => setStatusModal(null)}>
+        <div className={s.overlay} onClick={() => { setStatusModal(null); setRepairFile(null); }}>
           <div className={s.modal} style={{ borderTopColor: STATUS_CONFIG[statusValue]?.color || '#3E6AE1' }} onClick={e => e.stopPropagation()}>
             <div className={s.modalTitle}>更新工单状态</div>
             <div className={s.modalSub}>记录 #{statusModal.id}「{statusModal.label_cn || statusModal.label || '—'}」</div>
@@ -394,13 +412,62 @@ export default function MyRecordsPanel() {
               ))}
             </div>
             <input
-              className={s.workerInput}
+              className={`${s.workerInput} ${statusValue === 'repaired' ? s.workerInputCompact : ''}`}
               placeholder="负责人姓名（可选）"
               value={workerValue}
               onChange={e => setWorkerValue(e.target.value)}
             />
+            {statusValue === 'repaired' && (
+              <div className={s.repairSection}>
+                <div className={s.repairLabel}>
+                  修补后照片
+                  <span className={s.repairRequired}>必填</span>
+                </div>
+                <input
+                  ref={repairInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={e => setRepairFile(e.target.files[0] || null)}
+                  style={{ display: 'none' }}
+                />
+                {repairFile ? (
+                  <div className={s.repairPreview}>
+                    {repairPreview && (
+                      <img src={repairPreview} className={s.repairThumb} alt="修补后照片预览" />
+                    )}
+                    <div className={s.repairFileInfo}>
+                      <span className={s.repairFileName}>{repairFile.name}</span>
+                      <span className={s.repairFileSize}>{(repairFile.size / 1024).toFixed(0)} KB</span>
+                    </div>
+                    <button
+                      type="button"
+                      className={s.repairResetBtn}
+                      onClick={() => { setRepairFile(null); if (repairInputRef.current) repairInputRef.current.value = ''; }}
+                    >
+                      重新选择
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className={s.repairZone}
+                    onClick={() => repairInputRef.current?.click()}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                      <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <div>
+                      <div className={s.repairZoneMain}>点击上传修补照片</div>
+                      <div className={s.repairZoneSub}>JPG · PNG · WEBP</div>
+                    </div>
+                  </button>
+                )}
+              </div>
+            )}
             <div className={s.modalActions}>
-              <button className={s.modalCancel} onClick={() => setStatusModal(null)}>取消</button>
+              <button className={s.modalCancel} onClick={() => { setStatusModal(null); setRepairFile(null); }}>取消</button>
               <button
                 className={s.modalConfirm}
                 style={{ background: STATUS_CONFIG[statusValue]?.color || '#3E6AE1' }}

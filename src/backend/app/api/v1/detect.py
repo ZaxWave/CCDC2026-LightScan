@@ -67,6 +67,8 @@ async def detect(
                 bbox=det.get("bbox"),
                 feature_vector=feature,
                 cluster_id=cluster_id,
+                source_type=current_user.source_type or "manual",
+                device_id=current_user.device_id,
                 creator_id=current_user.id,
             )
             db.add(db_record)

@@ -70,29 +70,59 @@ CCDC2026-LightScan/
 │
 ├── src/                                # 🛠️ 研发源代码主体
 │   ├── backend/                        # 后端：FastAPI
-│   │   └── app/                        # 应用主逻辑
-│   │       ├── main.py                 # 服务入口（路由注册、CORS、静态文件挂载）
+│   │   └── app/
+│   │       ├── main.py                 # 服务入口，路由注册、CORS、热迁移
 │   │       ├── api/v1/
-│   │       │   ├── detect.py           # POST /api/v1/detect（图片推理）
-│   │       │   ├── detect_video.py     # POST /api/v1/detect-video（视频推理）
-│   │       │   └── gis.py              # POST /api/v1/gis（位置服务）
-│   │       └── services/
-│   │           ├── inference_service.py # YOLO 推理单例封装
-│   │           ├── video_service.py    # 视频抽帧服务（OCR 距离 / 时间估算）
-│   │           └── geo_service.py      # 位置分析服务
+│   │       │   ├── auth.py             # 登录 / Token 颁发
+│   │       │   ├── detect.py           # 图片推理接口
+│   │       │   ├── detect_video.py     # 视频推理接口（OCR / 估算模式）
+│   │       │   ├── gis.py              # GIS 记录、工单流转、统计
+│   │       │   └── users.py            # 个人设置、密码修改
+│   │       ├── services/
+│   │       │   ├── inference_service.py  # YOLO 推理单例 + ReID 特征提取
+│   │       │   ├── video_service.py      # 视频抽帧（OCR 距离 / 时间估算）
+│   │       │   ├── clustering_service.py # 空间 + 视觉双门限聚类
+│   │       │   └── geo_service.py        # GPS 解析
+│   │       ├── db/
+│   │       │   ├── database.py         # SQLAlchemy 引擎与会话
+│   │       │   └── models.py           # DiseaseRecord、User 数据模型
+│   │       ├── schemas/
+│   │       │   ├── disease.py          # DiseaseRecordOut、StatsOut
+│   │       │   └── user.py             # UserProfile、UserUpdate、PasswordChange
+│   │       └── core/
+│   │           └── security.py         # 密码哈希、JWT 签发与验证
 │   └── frontend/                       # 前端：React 18 + Vite
-│       ├── src/                        # React 源码
+│       ├── src/
 │       │   ├── main.jsx                # 入口
-│       │   ├── App.jsx                 # 根组件
-│       │   ├── App.css                 # 根组件布局样式
-│       │   ├── api/client.js           # API 封装（detectImages / detectVideo）
-│       │   ├── components/             # 通用组件（Nav、Hero、TabBar、UploadArea 等）
-│       │   │   └── video/              # 视频检测 Modal 与 Canvas 框选组件
-│       │   ├── panels/                 # 页面面板（ImagePanel / VideoPanel）
-│       │   └── styles/variables.css    # 全局 CSS 变量（设计系统）
-│       ├── public/                     # 构建产物（FastAPI 托管目录）
-│       ├── index.html                  # Vite 开发模板
-│       ├── vite.config.js              # Vite 配置（outDir → public，代理 /api → 8000）
+│       │   ├── App.jsx                 # 路由根组件（登录守卫）
+│       │   ├── api/
+│       │   │   ├── auth.js             # 登录 / 注销请求
+│       │   │   └── client.js           # 所有业务 API 封装（Token 注入、401 拦截）
+│       │   ├── components/
+│       │   │   ├── map/                # 地图子组件
+│       │   │   │   ├── ClusterLayer.jsx      # 散点标记层（AMap.Marker）
+│       │   │   │   ├── HeatmapControls.jsx   # 热力图控件（渐变预设 + 滑块）
+│       │   │   │   ├── MarkerInfoWindow.js   # InfoWindow HTML 构建
+│       │   │   │   └── TimelineModal.jsx     # 演变时间轴弹窗（ECharts 双轴）
+│       │   │   └── video/              # 视频检测子组件
+│       │   │       ├── VideoDetectModal.jsx
+│       │   │       └── RegionCanvas.jsx
+│       │   ├── context/
+│       │   │   ├── ToastContext.jsx     # 全局 Toast 通知
+│       │   │   └── NetworkContext.jsx  # 网络状态感知
+│       │   ├── panels/                 # 页面级面板
+│       │   │   ├── LoginPanel.jsx
+│       │   │   ├── ImagePanel.jsx
+│       │   │   ├── VideoPanel.jsx
+│       │   │   ├── MapPanel.jsx        # GIS 地图（散点 / 热力图）
+│       │   │   ├── DashboardPanel.jsx  # 态势感知大屏
+│       │   │   ├── MyRecordsPanel.jsx  # 个人档案与工单管理
+│       │   │   └── AboutPanel.jsx
+│       │   └── utils/
+│       │       └── offlineDB.js        # IndexedDB 离线缓存
+│       ├── public/                     # 构建产物（FastAPI 静态托管目录）
+│       ├── index.html
+│       ├── vite.config.js              # outDir → public，/api 代理至 8000
 │       └── package.json
 │
 ├── tools/                              # 🛠️ 独立工具链
@@ -213,10 +243,19 @@ uvicorn app.main:app --reload --port 8000
 
 | 方法 | 路径 | 说明 |
 | :--- | :--- | :--- |
-| `GET`  | `/health` | 健康检查 |
-| `POST` | `/api/v1/detect` | 图片推理（multipart，最多 20 张） |
-| `POST` | `/api/v1/detect-video/first-frame` | 获取视频第一帧（用于手动框选速度区域） |
-| `POST` | `/api/v1/detect-video` | 视频推理（ocr / timed 两种模式） |
+| `GET`    | `/health` | 健康检查 |
+| `POST`   | `/api/v1/auth/login` | 登录，返回 JWT Token |
+| `POST`   | `/api/v1/detect` | 图片推理（multipart，最多 20 张） |
+| `POST`   | `/api/v1/detect-video/first-frame` | 获取视频第一帧（手动框选速度区域） |
+| `POST`   | `/api/v1/detect-video` | 视频推理（ocr / timed 两种模式） |
+| `GET`    | `/api/v1/gis/records` | 获取全平台病害记录（含坐标） |
+| `GET`    | `/api/v1/gis/my-records` | 获取当前用户的记录 |
+| `DELETE` | `/api/v1/gis/records/{id}` | 软删除（移入回收站） |
+| `PATCH`  | `/api/v1/gis/records/{id}/status` | 更新工单状态（含修补照片上传） |
+| `GET`    | `/api/v1/gis/clusters/{id}/timeline` | 获取病害点演变时间轴 |
+| `GET`    | `/api/v1/gis/source-stats` | 各数据来源记录统计 |
+| `GET`    | `/api/v1/users/me` | 获取个人信息与统计 |
+| `PATCH`  | `/api/v1/users/me` | 修改资料（昵称、单位、来源类型） |
 
 > **注意**：首次使用视频 OCR 模式时，PaddleOCR 会从 HuggingFace 下载模型文件（约 130 MB），之后缓存复用。
 > 如遇网络问题，可设置 `$env:PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK = "True"` 跳过来源校验。

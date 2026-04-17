@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo } from 'react';
 import AMapLoader from '@amap/amap-jsapi-loader';
 import ReactECharts from 'echarts-for-react';
+import { getSourceStats } from '../api/client';
 
 const AMAP_KEY           = import.meta.env.VITE_AMAP_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
@@ -73,11 +74,12 @@ function SectionLabel({ children }) {
 }
 
 export default function DashboardPanel({ onExit }) {
-  const [records,  setRecords]  = useState([]);
-  const [stats,    setStats]    = useState(null);
-  const [now,      setNow]      = useState(new Date());
-  const [mapReady, setMapReady] = useState(false);
-  const [tickIdx,  setTickIdx]  = useState(0);
+  const [records,     setRecords]     = useState([]);
+  const [stats,       setStats]       = useState(null);
+  const [sourceStat,  setSourceStat]  = useState([]);
+  const [now,         setNow]         = useState(new Date());
+  const [mapReady,    setMapReady]    = useState(false);
+  const [tickIdx,     setTickIdx]     = useState(0);
 
   const mapRef     = useRef(null);
   const mapObjRef  = useRef(null);
@@ -95,6 +97,7 @@ export default function DashboardPanel({ onExit }) {
       .then(r => r.json()).then(d => setRecords(d || [])).catch(() => {});
     fetch('/api/v1/gis/stats')
       .then(r => r.json()).then(setStats).catch(() => {});
+    getSourceStats().then(setSourceStat).catch(() => {});
   };
   useEffect(() => {
     load();
@@ -187,8 +190,8 @@ export default function DashboardPanel({ onExit }) {
     });
     const colorMap = {
       '坑槽':    '#ef4444',
-      '网状裂缝': '#f59e0b',
-      '纵横裂缝': '#f97316',
+      '龟裂':    '#f59e0b',
+      '纵向裂缝': '#f97316',
       '横向裂缝': '#3b82f6',
     };
     const data = Object.entries(counts).map(([name, value]) => ({
@@ -342,6 +345,54 @@ export default function DashboardPanel({ onExit }) {
       ],
     };
   }, [records]);
+
+  // ── 数据来源分布（水平条形图）
+  const sourceOption = useMemo(() => {
+    const SOURCE_COLOR = {
+      bus_dashcam:   '#3b82f6',
+      street_camera: '#f59e0b',
+      drone:         '#8b5cf6',
+      manual:        '#22c55e',
+    };
+    const sorted = [...sourceStat].sort((a, b) => b.count - a.count);
+    const axisBase = {
+      axisLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 9 },
+      axisLine:  { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+      axisTick:  { show: false },
+      splitLine: { lineStyle: { color: 'rgba(255,255,255,0.04)', type: 'dashed' } },
+    };
+    return {
+      backgroundColor: 'transparent',
+      tooltip: {
+        trigger: 'axis', axisPointer: { type: 'shadow' },
+        backgroundColor: 'rgba(8,12,26,0.95)',
+        borderColor: 'rgba(0,212,255,0.25)',
+        textStyle: { color: '#fff', fontSize: 11 },
+        formatter: (p) => `${p[0].axisValue}&nbsp;&nbsp;<b>${p[0].value}</b> 条`,
+      },
+      grid: { left: '2%', right: '18%', bottom: '3%', top: '6%', containLabel: true },
+      xAxis: { type: 'value', minInterval: 1, ...axisBase },
+      yAxis: {
+        type: 'category',
+        data: sorted.map(s => s.label),
+        ...axisBase,
+        axisLabel: { ...axisBase.axisLabel, width: 52, overflow: 'truncate' },
+      },
+      series: [{
+        type: 'bar',
+        barMaxWidth: 12,
+        data: sorted.map(s => ({
+          value: s.count,
+          itemStyle: { color: SOURCE_COLOR[s.source_type] || '#6366f1', borderRadius: [0, 3, 3, 0] },
+        })),
+        label: {
+          show: true, position: 'right',
+          fontSize: 9, color: 'rgba(255,255,255,0.35)',
+          formatter: '{c}',
+        },
+      }],
+    };
+  }, [sourceStat]);
 
   // ── 顶部统计
   const weekTotal  = stats?.daily?.reduce((a, d) => a + d.count, 0) ?? 0;
@@ -612,6 +663,26 @@ export default function DashboardPanel({ onExit }) {
                 )}
               </div>
             ))}
+          </div>
+
+          {/* 数据来源分布 */}
+          <div style={{
+            flexShrink: 0,
+            ...panelStyle('#f59e0b'),
+            padding: '8px 10px',
+            height: 140,
+            display: 'flex', flexDirection: 'column',
+          }}>
+            <SectionLabel>数据来源分布</SectionLabel>
+            <div style={{ flex: 1, minHeight: 0 }}>
+              {sourceStat.length === 0 ? (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: 'rgba(255,255,255,0.15)' }}>
+                  暂无数据
+                </div>
+              ) : (
+                <ReactECharts option={sourceOption} style={{ height: '100%', width: '100%' }} />
+              )}
+            </div>
           </div>
 
           {/* 底部刷新提示 */}

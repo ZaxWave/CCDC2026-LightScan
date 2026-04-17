@@ -90,10 +90,16 @@ export function restoreRecord(id) {
 export function batchDeleteRecords(ids) {
   return request('/api/v1/gis/records/batch-delete', { ids }, 'POST');
 }
-export function updateRecordStatus(id, status, worker_name) {
-  const body = { status };
-  if (worker_name !== undefined && worker_name !== null) body.worker_name = worker_name;
-  return request(`/api/v1/gis/records/${id}/status`, body, 'PATCH');
+export function updateRecordStatus(id, status, worker_name, repairedImageFile) {
+  const form = new FormData();
+  form.append('status', status);
+  if (worker_name) form.append('worker_name', worker_name);
+  if (repairedImageFile) form.append('repaired_image', repairedImageFile);
+  return request(`/api/v1/gis/records/${id}/status`, form, 'PATCH');
+}
+
+export function getSourceStats() {
+  return request('/api/v1/gis/source-stats', null, 'GET');
 }
 
 export function getClusterTimeline(recordId) {

@@ -28,16 +28,20 @@ class UserProfile(BaseModel):
     is_active: bool
     created_at: Optional[datetime] = None
     record_count: int = 0
-    nickname: Optional[str] = None
-    unit: Optional[str] = None
+    nickname:    Optional[str] = None
+    unit:        Optional[str] = None
+    source_type: Optional[str] = "manual"
+    device_id:   Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class UserUpdate(BaseModel):
     """PATCH /users/me 请求体"""
-    nickname: Optional[str] = None
-    unit: Optional[str] = None
+    nickname:    Optional[str] = None
+    unit:        Optional[str] = None
+    source_type: Optional[str] = None
+    device_id:   Optional[str] = None
 
 
 class PasswordChange(BaseModel):
