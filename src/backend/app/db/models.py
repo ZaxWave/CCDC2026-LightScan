@@ -39,6 +39,11 @@ class DiseaseRecord(Base):
     # 软删除：记录进入回收站的时间，NULL 表示正常
     deleted_at = Column(DateTime, nullable=True, default=None)
 
+    # 空间聚类：同一病害点的多次拍摄共享同一 cluster_id（UUID 字符串）
+    cluster_id     = Column(String, nullable=True, index=True)
+    # ReID 视觉特征：检测框区域的 HSV 直方图（32 维归一化向量）
+    feature_vector = Column(JSONB, nullable=True)
+
     # 外键和反向关联
     creator_id = Column(Integer, ForeignKey("users.id"), index=True)
     creator = relationship("User", back_populates="records")

@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.database import get_db
 from app.db.models import DiseaseRecord, User
+from app.services.clustering_service import assign_cluster
 from app.services.video_service import (
     detect_video_ocr,
     detect_video_timed,
@@ -140,7 +141,9 @@ async def detect_video(
             ts = datetime.utcnow()
 
         for det in frame.get("detections", []):
-            db_record = DiseaseRecord(
+            feature    = det.get("feature")
+            cluster_id = assign_cluster(lat, lng, det.get("label_cn"), feature, db)
+            db_record  = DiseaseRecord(
                 filename=frame.get("filename"),
                 lat=lat,
                 lng=lng,
@@ -150,6 +153,8 @@ async def detect_video(
                 confidence=det.get("conf"),
                 color_hex=det.get("color"),
                 bbox=det.get("bbox"),
+                feature_vector=feature,
+                cluster_id=cluster_id,
                 creator_id=current_user.id,
             )
             db.add(db_record)

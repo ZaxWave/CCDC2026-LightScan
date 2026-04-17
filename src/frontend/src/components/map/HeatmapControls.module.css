@@ -1,0 +1,106 @@
+.panel {
+  position: absolute;
+  bottom: 36px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+
+  background: rgba(8, 11, 20, 0.92);
+  backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 10px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+/* 预设按钮组 */
+.presets {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.preset {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.preset:hover { color: rgba(255, 255, 255, 0.7); border-color: rgba(255, 255, 255, 0.25); }
+.preset.active {
+  background: rgba(62, 106, 225, 0.2);
+  border-color: rgba(62, 106, 225, 0.6);
+  color: #93b4f7;
+  font-weight: 600;
+}
+
+/* 滑杆行 */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+  width: 52px;
+  flex-shrink: 0;
+}
+
+.slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100px;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #3E6AE1;
+  border: 2px solid #fff;
+  box-shadow: 0 0 6px rgba(62, 106, 225, 0.5);
+  cursor: pointer;
+}
+.slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #3E6AE1;
+  border: 2px solid #fff;
+  cursor: pointer;
+}
+
+.val {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+  width: 42px;
+  text-align: right;
+  flex-shrink: 0;
+}

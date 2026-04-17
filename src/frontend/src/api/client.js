@@ -95,3 +95,7 @@ export function updateRecordStatus(id, status, worker_name) {
   if (worker_name !== undefined && worker_name !== null) body.worker_name = worker_name;
   return request(`/api/v1/gis/records/${id}/status`, body, 'PATCH');
 }
+
+export function getClusterTimeline(recordId) {
+  return request(`/api/v1/gis/clusters/${recordId}/timeline`, null, 'GET');
+}

@@ -39,6 +39,28 @@ LABEL_HEX = {k: v["hex"] for k, v in COLOR_CONFIG.items()}
 DEFAULT_COLOR_BGR = (255, 255, 255)
 DEFAULT_HEX = "#FFFFFF"
 
+
+def extract_feature(img_bgr: np.ndarray, bbox: list) -> list:
+    """
+    从检测框裁剪区域提取轻量视觉特征向量（32 维 HSV 颜色直方图）。
+
+    用于 ReID 空间聚类：当两条记录 GPS 距离相近时，进一步比较
+    检测区域的颜色分布相似度，判断是否为同一病害点的重复拍摄。
+
+    Returns: 归一化后的 float 列表，空裁剪时返回空列表。
+    """
+    x1, y1, x2, y2 = [max(0, int(v)) for v in bbox]
+    crop = img_bgr[y1:y2, x1:x2]
+    if crop.size == 0:
+        return []
+    hsv    = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+    hist_h = cv2.calcHist([hsv], [0], None, [16], [0, 180]).flatten()  # 色调 16 档
+    hist_s = cv2.calcHist([hsv], [1], None, [8],  [0, 256]).flatten()  # 饱和度 8 档
+    hist_v = cv2.calcHist([hsv], [2], None, [8],  [0, 256]).flatten()  # 明度 8 档
+    feat   = np.concatenate([hist_h, hist_s, hist_v])                  # 32 维
+    norm   = np.linalg.norm(feat)
+    return (feat / norm).tolist() if norm > 1e-6 else feat.tolist()
+
 # 类别样式标签映射 (保留兼容性)
 LABEL_TAG = {
     "D00": "tag-crack",
@@ -100,13 +122,17 @@ def run_detect(img_bytes: bytes, conf: float = 0.25) -> dict:
         
         label_cn = LABEL_CN.get(label, label)
         
+        # 提取 ReID 特征向量（HSV 直方图，用于后续空间聚类去重）
+        feature = extract_feature(img_bgr, [x1, y1, x2, y2])
+
         # 封装前端所需数据结构
         detections.append({
             "label":    label,
             "label_cn": label_cn,
-            "color":    LABEL_HEX.get(label, DEFAULT_HEX), 
+            "color":    LABEL_HEX.get(label, DEFAULT_HEX),
             "conf":     confidence,
             "bbox":     [x1, y1, x2, y2],
+            "feature":  feature,           # 传递给 API 层做聚类，不发往前端
         })
 
         # --- 图像可视化绘制 ---

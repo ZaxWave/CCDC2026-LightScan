@@ -39,6 +39,14 @@ def _migrate_disease_records():
                 conn.execute(text(
                     "ALTER TABLE disease_records ADD COLUMN worker_name VARCHAR"
                 ))
+            if "cluster_id" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE disease_records ADD COLUMN cluster_id VARCHAR"
+                ))
+            if "feature_vector" not in cols:
+                conn.execute(text(
+                    "ALTER TABLE disease_records ADD COLUMN feature_vector JSONB"
+                ))
             conn.commit()
     except Exception as e:
         warnings.warn(f"⚠️ DB migration warning: {e}", RuntimeWarning)

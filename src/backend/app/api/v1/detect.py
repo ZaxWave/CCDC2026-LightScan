@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.services.inference_service import run_detect
+from app.services.clustering_service import assign_cluster
 from app.db.database import get_db
 from app.db.models import DiseaseRecord, User
 from app.api.deps import get_current_user # 引入路由守卫
@@ -53,19 +54,23 @@ async def detect(
         lng = location.get("lng", 0.0)
 
         for det in res.get("detections", []):
+            feature = det.get("feature")
+            cluster_id = assign_cluster(lat, lng, det.get("label_cn"), feature, db)
             db_record = DiseaseRecord(
                 filename=upload.filename,
                 lat=lat,
                 lng=lng,
-                label=det.get("label"),           # 例: "D40"
-                label_cn=det.get("label_cn"),     # 例: "坑槽"
-                confidence=det.get("conf"),       # 置信度数值
-                color_hex=det.get("color"),       # 例: "#ff4444"
-                bbox=det.get("bbox"),             # [x1, y1, x2, y2]
-                creator_id=current_user.id        
+                label=det.get("label"),
+                label_cn=det.get("label_cn"),
+                confidence=det.get("conf"),
+                color_hex=det.get("color"),
+                bbox=det.get("bbox"),
+                feature_vector=feature,
+                cluster_id=cluster_id,
+                creator_id=current_user.id,
             )
             db.add(db_record)
-        
+
         db.commit()
 
         results.append({

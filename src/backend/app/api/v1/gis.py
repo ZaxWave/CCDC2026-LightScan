@@ -1,3 +1,4 @@
+import math
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
@@ -210,6 +211,97 @@ def get_my_stats(
         or 0
     )
     return StatsOut(daily=daily, total=total)
+
+
+@router.get("/clusters/{record_id}/timeline")
+def get_cluster_timeline(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    演变时间轴：以给定记录为参照，查找 10m 半径内、相同病害类型、近 3 个月的所有拍摄记录，
+    按时间升序返回置信度与检测框面积，用于前端绘制恶化趋势折线图。
+    """
+    ref = db.query(DiseaseRecord).filter(
+        DiseaseRecord.id == record_id,
+        DiseaseRecord.deleted_at == None,
+    ).first()
+    if not ref:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    if not ref.lat or not ref.lng:
+        raise HTTPException(status_code=422, detail="该记录缺少坐标信息")
+
+    three_months_ago = datetime.utcnow() - timedelta(days=90)
+
+    # 10 米对应的经纬度容差（赤道附近 1° ≈ 111111m）
+    delta_lat = 10.0 / 111111.0
+    delta_lng = 10.0 / (111111.0 * math.cos(math.radians(ref.lat)))
+
+    # 优先按 cluster_id 查（ReID 聚类后精度更高）；
+    # 无 cluster_id 的旧数据回退到空间查询。
+    if ref.cluster_id:
+        records = (
+            db.query(DiseaseRecord)
+            .filter(
+                DiseaseRecord.cluster_id == ref.cluster_id,
+                DiseaseRecord.timestamp >= three_months_ago,
+                DiseaseRecord.deleted_at == None,
+            )
+            .order_by(DiseaseRecord.timestamp.asc())
+            .all()
+        )
+    else:
+        records = (
+            db.query(DiseaseRecord)
+            .filter(
+                DiseaseRecord.label_cn == ref.label_cn,
+                DiseaseRecord.lat.between(ref.lat - delta_lat, ref.lat + delta_lat),
+                DiseaseRecord.lng.between(ref.lng - delta_lng, ref.lng + delta_lng),
+                DiseaseRecord.timestamp >= three_months_ago,
+                DiseaseRecord.deleted_at == None,
+            )
+            .order_by(DiseaseRecord.timestamp.asc())
+            .all()
+        )
+
+    timeline = []
+    for r in records:
+        bbox_area = None
+        if r.bbox and isinstance(r.bbox, list) and len(r.bbox) >= 4:
+            try:
+                x1, y1, x2, y2 = (float(v) for v in r.bbox[:4])
+                bbox_area = round(abs((x2 - x1) * (y2 - y1)))
+            except (TypeError, ValueError):
+                pass
+
+        timeline.append({
+            "id":         r.id,
+            "timestamp":  r.timestamp.isoformat(),
+            "confidence": round(r.confidence, 4) if r.confidence is not None else None,
+            "bbox_area":  bbox_area,
+            "filename":   r.filename,
+            "status":     r.status,
+        })
+
+    # 简单趋势判断：末尾 vs 开头置信度差值
+    conf_vals = [t["confidence"] for t in timeline if t["confidence"] is not None]
+    if len(conf_vals) >= 2:
+        delta = conf_vals[-1] - conf_vals[0]
+        trend = "deteriorating" if delta > 0.05 else ("improving" if delta < -0.05 else "stable")
+    else:
+        trend = "stable"
+
+    return {
+        "label":     ref.label,
+        "label_cn":  ref.label_cn,
+        "color_hex": ref.color_hex,
+        "lat":       ref.lat,
+        "lng":       ref.lng,
+        "total":     len(timeline),
+        "trend":     trend,
+        "timeline":  timeline,
+    }
 
 
 @router.get("/stats", response_model=StatsOut)
