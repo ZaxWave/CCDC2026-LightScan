@@ -18,6 +18,7 @@ from app.api.v1.gis import router as gis_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.report import router as report_router
+from app.api.v1.ai_report import router as ai_report_router
 
 from sqlalchemy import inspect, text
 from .db.database import engine
@@ -61,6 +62,27 @@ def _migrate_disease_records():
             if "device_id" not in user_cols:
                 conn.execute(text("ALTER TABLE users ADD COLUMN device_id VARCHAR"))
             conn.commit()
+
+        # disease_clusters 表（文档 Table 5 主实体）
+        existing_tables = inspect(engine).get_table_names()
+        if "disease_clusters" not in existing_tables:
+            with engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS disease_clusters (
+                        cluster_id         VARCHAR PRIMARY KEY,
+                        worker_id          INTEGER REFERENCES users(id),
+                        label_cn           VARCHAR NOT NULL,
+                        canonical_lat      FLOAT NOT NULL,
+                        canonical_lng      FLOAT NOT NULL,
+                        status             VARCHAR NOT NULL DEFAULT 'pending',
+                        detection_count    INTEGER NOT NULL DEFAULT 1,
+                        first_detected_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+                        last_detected_at   TIMESTAMP NOT NULL DEFAULT NOW(),
+                        repaired_at        TIMESTAMP,
+                        repaired_image_b64 TEXT
+                    )
+                """))
+                conn.commit()
     except Exception as e:
         warnings.warn(f"⚠️ DB migration warning: {e}", RuntimeWarning)
 
@@ -102,6 +124,7 @@ app.include_router(report_router)
 app.include_router(detect_router)
 app.include_router(detect_video_router)
 app.include_router(gis_router)
+app.include_router(ai_report_router)
 
 
 @app.get("/health")

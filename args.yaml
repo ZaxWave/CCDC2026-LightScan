@@ -7,22 +7,22 @@
 # ------------------------------------------------------------------------------
 task: detect
 mode: train
-model: /root/models/yolo11n.pt
+model: /root/models/lsdet_arch.yaml   # LS-Det v1 自定义网络结构
 data: /root/datasets/road_defect.yaml
 project: /root/runs/train
-name: lightscan_rdd2022_baseline4
+name: lsdet_v1
 save: true
 device: '0'
 workers: 4
 cache: disk
-batch: 64
-imgsz: 1024
+batch: 16
+imgsz: 960
 
 # ------------------------------------------------------------------------------
 # 2. 训练超参数
 # ------------------------------------------------------------------------------
-epochs: 300
-patience: 50
+epochs: 180
+patience: 40
 optimizer: auto
 lr0: 0.01
 lrf: 0.01
@@ -137,4 +137,4 @@ auto_augment: randaugment
 cfg: null
 tracker: botsort.yaml
 time: null
-save_dir: /root/runs/train/lightscan_rdd2022_baseline4
+save_dir: /root/runs/train/lsdet_v1

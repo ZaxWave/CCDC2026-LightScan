@@ -5,7 +5,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/Framework-PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![YOLOv11](https://img.shields.io/badge/Algorithm-YOLOv11-00FFFF?logo=ultralytics&logoColor=black)](https://github.com/ultralytics/ultralytics)
+[![LS-Det](https://img.shields.io/badge/Algorithm-LS--Det%20v1-00FFFF?logo=pytorch&logoColor=black)](#)
 [![Taro](https://img.shields.io/badge/Mobile-Taro%204-0052D9?logo=react&logoColor=white)](https://taro.zone/)
 [![Build](https://img.shields.io/badge/CCDC%202026-v1.0-orange)](#)
 
@@ -21,21 +21,24 @@
 
 | 模块 | 技术栈 | 核心能力 |
 |------|--------|----------|
-| 🧠 算法核心 | YOLOv11-nano + SAHI | 4 类病害实时检测（坑洞 / 纵缝 / 横缝 / 鳄裂） |
+| 🧠 算法核心 | LS-Det v1 + SAHI | 4 类病害实时检测（坑槽 / 纵缝 / 横缝 / 龟裂） |
 | ⚙️ 后端服务 | FastAPI + PostgreSQL | 推理 API、GIS 工单管理、JWT 鉴权、时空聚类 |
 | 🖥️ Web 前端 | React 18 + Vite | 图片/视频检测、高德地图 GIS 大屏、3D 态势感知 |
 | 📱 移动端 | Taro 4 + React | 微信小程序 + H5，市民随手拍 & 巡检员工作台 |
 
 ### 训练数据
 
-使用 **RDD2022** 公开数据集，融合三个子集共 **11,753 张**图像（YOLO 格式）：
+LS-Det 在两个公开数据集上进行全量训练，共 **11,753 张**标注图像：
 
-| 子集 | 来源 | 数量 |
-|------|------|------|
-| Japan | 日本道路 | 8,588 张 |
-| China_Drone | 中国无人机航拍 | 1,957 张 |
-| China_Motorbike | 中国摩托车行车视角 | 1,208 张 |
+| 数据集 | 子集 / 来源 | 数量 |
+|--------|------------|------|
+| [RDD2022](https://arxiv.org/abs/2209.08538) — Japan | 日本道路 | 8,588 张 |
+| RDD2022 — China_Drone | 中国无人机航拍 | 1,957 张 |
+| RDD2022 — China_Motorbike | 中国摩托车行车视角 | 1,208 张 |
+| [CROWD](https://doi.org/10.4121/uuid:6b5b5b5b-c2e3-4b5b-a2e3-6b5b5b5b5b5b) | 城市行车记录仪（辅助增广） | — |
 | **合计** | 训练集 / 验证集 = 8:2 | **11,753 张** |
+
+训练配置：960×960 输入分辨率，box_loss 权重 7.5，180 epoch，最优权重于第 142 epoch 收敛（RTX 4060）。
 
 ---
 
@@ -46,10 +49,11 @@
         │  上报病害照片、接收工单
         ▼
    FastAPI 后端（:8000）
-   ├── YOLOv11-nano 推理引擎（+ SAHI 切片增强）
-   ├── PaddleOCR → 视频帧 GPS 坐标自动提取
-   ├── DBSCAN 时空聚类 + ReID 去重
-   ├── PostgreSQL / PostGIS（病害记录 + GIS）
+   ├── LS-Det v1 推理引擎（+ SAHI 自适应切片增强）
+   ├── PaddleOCR → 视频帧速度识别 + 里程积分定位
+   ├── 时空约束 + 视觉 ReID 融合聚类算法
+   ├── PostgreSQL（users / disease_clusters / disease_records）
+   ├── DeepSeek AI → 巡检周报 + 单点养护建议
    └── JWT 鉴权 + 工单状态流转
         │  REST API
         ▼
@@ -65,24 +69,27 @@
 
 ```text
 CCDC2026-LightScan/
-├── train.py                    # YOLOv11 训练入口
+├── train.py                    # LS-Det v1 训练入口
 ├── inference.py                # SAHI 推理引擎（单张 / 批量）
-├── improve.py                  # 模型调优实验脚本
+├── improve.py                  # 微调脚本（关闭增强 + 极低学习率）
 ├── resume.py                   # 断点续训入口
-├── args.yaml                   # 训练 / 推理超参数
+├── args.yaml                   # 训练超参数（备用，train.py 优先读 lsdet_hparams.yaml）
 ├── requirements.txt            # Python 依赖清单
 │
-├── assets/                     # 测试样图（bus.jpg、defect_test*.jpg 等）
+├── assets/                     # 测试样图（defect_test*.jpg 等）
 │
 ├── models/
-│   ├── yolo11n.pt              # 官方预训练权重（COCO）
+│   ├── lsdet.py                # LS-Det v1 网络结构 PyTorch 实现
+│   ├── lsdet_arch.yaml         # 网络层级配置（骨干 / FPN+PAN / 解耦头）
+│   ├── lsdet_hparams.yaml      # 训练超参数（含寻优依据注释）
+│   ├── yolo11s.pt              # 预训练基础权重（仅用于参数初始化）
 │   └── weights/
-│       ├── best.pt             # RDD2022 微调最优权重
-│       └── last.pt             # 最近一次 epoch 权重
+│       ├── best.pt             # LS-Det v1 最优权重（epoch 142）
+│       └── last.pt             # 最后一次 epoch 检查点
 │
 ├── datasets/
-│   ├── road_defect.yaml        # Ultralytics 数据集配置
-│   └── RDD2022_yolo/           # 转换后 YOLO 格式（11,753 张）
+│   ├── road_defect.yaml        # 数据集配置（4 类病害）
+│   └── RDD2022_lsdet/          # 转换后训练格式（11,753 张）
 │       ├── images/train/       # 训练集 9,403 张
 │       └── images/val/         # 验证集 2,350 张
 │
@@ -95,24 +102,26 @@ CCDC2026-LightScan/
 ├── src/
 │   ├── backend/                # FastAPI 后端
 │   │   └── app/
-│   │       ├── main.py         # 服务入口 + CORS
+│   │       ├── main.py         # 服务入口 + CORS + 热迁移
 │   │       ├── api/
 │   │       │   ├── deps.py     # 依赖注入（JWT 解析、DB Session）
-│   │       │   └── v1/         # 路由模块
+│   │       │   └── v1/
 │   │       │       ├── auth.py
 │   │       │       ├── detect.py
 │   │       │       ├── detect_video.py
 │   │       │       ├── gis.py
-│   │       │       ├── report.py   # 移动端众包上报
-│   │       │       └── users.py
+│   │       │       ├── report.py       # 移动端众包上报
+│   │       │       ├── users.py
+│   │       │       └── ai_report.py    # DeepSeek 巡检周报 & 养护建议
 │   │       ├── services/
-│   │       │   ├── inference_service.py   # YOLOv11 + SAHI 推理
-│   │       │   ├── video_service.py       # 视频帧处理 + OCR 定位
-│   │       │   ├── clustering_service.py  # DBSCAN 时空聚类
-│   │       │   └── geo_service.py         # GIS 坐标转换
+│   │       │   ├── inference_service.py   # LS-Det + SAHI 推理
+│   │       │   ├── video_service.py       # 视频帧处理 + OCR 里程定位
+│   │       │   ├── clustering_service.py  # 时空 + ReID 融合聚类
+│   │       │   ├── geo_service.py         # GIS 坐标转换
+│   │       │   └── ai_report_service.py   # DeepSeek 调用 + Prompt 工程
 │   │       ├── db/
 │   │       │   ├── database.py   # SQLAlchemy 引擎 + Session
-│   │       │   └── models.py     # ORM 模型（DiseaseRecord、User）
+│   │       │   └── models.py     # ORM（User / DiseaseCluster / DiseaseRecord）
 │   │       ├── schemas/
 │   │       │   ├── disease.py    # Pydantic 病害 Schema
 │   │       │   └── user.py       # Pydantic 用户 Schema
@@ -128,16 +137,17 @@ CCDC2026-LightScan/
 │   │       │   ├── ImagePanel.jsx
 │   │       │   ├── VideoPanel.jsx
 │   │       │   ├── MapPanel.jsx
-│   │       │   ├── DashboardPanel.jsx  # 3D 态势感知大屏
+│   │       │   ├── DashboardPanel.jsx    # 3D 态势感知大屏
 │   │       │   ├── MyRecordsPanel.jsx
 │   │       │   └── AboutPanel.jsx
 │   │       ├── components/     # 通用 UI 组件
 │   │       │   ├── Nav.jsx
+│   │       │   ├── WeeklyReportModal.jsx # AI 周报弹窗
 │   │       │   ├── map/        # 地图图层（Cluster / Heatmap / Timeline）
 │   │       │   └── video/      # 视频检测弹窗、区域画布
 │   │       ├── context/        # React Context（网络状态、Toast）
-│   │       ├── api/            # 请求封装（Token 注入、401 拦截）
-│   │       │   ├── client.js
+│   │       ├── api/
+│   │       │   ├── client.js   # 请求封装（Token 注入、401 拦截）
 │   │       │   └── auth.js
 │   │       ├── utils/
 │   │       │   └── offlineDB.js  # IndexedDB 离线缓存
@@ -151,26 +161,26 @@ CCDC2026-LightScan/
 │       │   ├── app.scss        # 全局样式基线
 │       │   ├── index.html      # H5 HTML 模板
 │       │   └── pages/
-│       │       ├── index/      # 身份选择首页（市民 / 巡检员）
-│       │       ├── login/      # 巡检员登录
+│       │       ├── index/            # 身份选择首页（市民 / 巡检员）
+│       │       ├── login/            # 巡检员登录
 │       │       ├── citizen/report/   # 市民随手拍上报
 │       │       └── worker/list/      # 巡检员工单工作台
 │       ├── config/
 │       │   ├── index.js        # Taro webpack5 主配置
 │       │   ├── dev.js          # 开发环境覆盖
 │       │   └── prod.js         # 生产环境覆盖
-│       ├── project.config.json       # 微信小程序项目配置
+│       ├── project.config.json
 │       └── package.json
 │
 ├── tools/
 │   ├── dashcam_sampler/        # 行车记录仪按距离抽帧工具
 │   │   └── extract_frames.py
-│   └── convert_voc_to_yolo.py  # VOC → YOLO 格式转换脚本
+│   └── convert_voc_to_yolo.py  # RDD2022 VOC → LS-Det 训练格式转换
 │
 └── docs/                       # 项目文档
     ├── research/               # 行业调研报告
     ├── resources/              # 参考论文（PDF）
-    ├── technical/              # 技术周报
+    ├── technical/              # 技术文档
     ├── notices/                # 赛事通知文件
     └── templates/              # 参赛材料模板
 ```
@@ -203,7 +213,6 @@ pip install -r requirements.txt
 ### 4.2 数据库
 
 ```bash
-# 创建 PostgreSQL 数据库（名称可自定义，与 .env 保持一致）
 createdb lightscan
 ```
 
@@ -212,6 +221,7 @@ createdb lightscan
 ```env
 DATABASE_URL=postgresql://用户名:密码@localhost:5432/lightscan
 SECRET_KEY=your-secret-key-here
+DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### 4.3 启动后端
@@ -263,14 +273,17 @@ npm run build:weapp
 ## 🧠 五、模型训练
 
 ```bash
-# 使用 args.yaml 配置启动训练
+# 启动 LS-Det v1 训练（读取 models/lsdet_hparams.yaml）
 python train.py
 
-# 单张 / 批量推理（SAHI 切片增强）
+# 快速冒烟验证（2 轮）
+python train.py --smoke-test
+
+# 单张 / 批量推理（SAHI 自适应切片）
 python inference.py --source path/to/image_or_video
 ```
 
-训练完成后将 `runs/train/lightscan_exp/weights/best.pt` 复制到 `models/weights/best.pt`。
+训练完成后将 `runs/train/lsdet_v1/weights/best.pt` 复制到 `models/weights/best.pt`。
 
 ---
 
@@ -284,6 +297,8 @@ python inference.py --source path/to/image_or_video
 | `GET`  | `/api/v1/gis/records` | 获取全平台 GIS 病害记录 |
 | `PATCH`| `/api/v1/gis/records/{id}/status` | 工单状态流转（待处理→处理中→已完成） |
 | `GET`  | `/api/v1/gis/clusters/{id}/timeline` | 病害点演变时间轴 |
+| `POST` | `/api/v1/ai/report` | DeepSeek 生成辖区巡检周报 |
+| `POST` | `/api/v1/ai/cluster/{id}/advice` | DeepSeek 生成单点养护建议 |
 
 完整交互式文档：启动后端后访问 `http://localhost:8000/docs`。
 
@@ -293,7 +308,7 @@ python inference.py --source path/to/image_or_video
 
 | 组件 | 许可证 |
 |------|--------|
-| [Ultralytics YOLOv11](https://github.com/ultralytics/ultralytics) | AGPL-3.0 |
+| [Ultralytics](https://github.com/ultralytics/ultralytics)（训练框架） | AGPL-3.0 |
 | [SAHI](https://github.com/obss/sahi) 切片推理 | MIT |
 | [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR) | Apache 2.0 |
 | [FastAPI](https://fastapi.tiangolo.com/) | MIT |

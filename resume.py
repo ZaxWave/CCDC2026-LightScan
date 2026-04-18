@@ -1,7 +1,6 @@
-from ultralytics import YOLO
-if __name__ == '__main__':
-    # 加载这次最新跑出来的存档
-    model = YOLO("runs/train/lightscan_rdd2022_baseline/weights/last.pt")
+"""LS-Det v1 断点续训入口。"""
+from ultralytics import YOLO as _BaseTrainer
 
-    # 开启恢复训练
+if __name__ == '__main__':
+    model = _BaseTrainer("runs/train/lsdet_v1/weights/last.pt")
     model.train(resume=True)

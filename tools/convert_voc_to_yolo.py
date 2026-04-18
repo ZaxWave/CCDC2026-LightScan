@@ -1,6 +1,7 @@
 """
 tools/convert_voc_to_yolo.py
-将 RDD2022 VOC 格式标注转换为 YOLO 格式，合并三个子集到统一输出目录。
+将 RDD2022 VOC 格式标注转换为 LS-Det 训练格式（Ultralytics 归一化标注），
+合并三个子集（Japan / China_MotorBike / China_Drone）到统一输出目录。
 
 用法:
     python tools/convert_voc_to_yolo.py --dry-run   # 预检，只扫描不写文件
@@ -30,7 +31,7 @@ LABEL_MAP = {          # 只保留这 4 类，其余全部忽略
     "D40": 3,          # 坑槽     Pothole
 }
 
-OUTPUT_DIR  = DATASETS_DIR / "RDD2022_yolo"
+OUTPUT_DIR  = DATASETS_DIR / "RDD2022_lsdet"
 RANDOM_SEED = 42
 VAL_RATIO   = 0.2
 
@@ -38,7 +39,7 @@ VAL_RATIO   = 0.2
 # ── 工具函数 ──────────────────────────────────────────────────────────────────
 
 def parse_args() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="RDD2022 VOC → YOLO 格式转换")
+    p = argparse.ArgumentParser(description="RDD2022 VOC → LS-Det 训练格式转换")
     p.add_argument("--dry-run", action="store_true",
                    help="只扫描统计，不写任何文件")
     return p.parse_args()
@@ -67,7 +68,7 @@ def parse_xml(xml_path: Path) -> list[tuple]:
         xmax = float(bnd.findtext("xmax"))
         ymax = float(bnd.findtext("ymax"))
 
-        # 坐标越界裁剪，防止标注瑕疵导致 YOLO 训练报错
+        # 坐标越界裁剪，防止标注瑕疵导致训练报错
         xmin = max(0.0, min(xmin, W))
         ymin = max(0.0, min(ymin, H))
         xmax = max(0.0, min(xmax, W))
@@ -76,7 +77,7 @@ def parse_xml(xml_path: Path) -> list[tuple]:
         if xmax <= xmin or ymax <= ymin:
             continue                         # 裁剪后仍为无效框，跳过
 
-        # 转 YOLO 归一化格式
+        # 转归一化标注格式 (cls x_c y_c w h)
         x_c = (xmin + xmax) / 2 / W
         y_c = (ymin + ymax) / 2 / H
         bw  = (xmax - xmin) / W

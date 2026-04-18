@@ -23,10 +23,10 @@ class LightScanInference:
         else:
             self.device = device
             
-        # 初始化 SAHI 模型封装
-        # 说明：参数 model_type='yolov8' 兼容基于 Ultralytics 架构的模型版本
+        # 初始化 SAHI 推理封装
+        # model_type='yolov8' 为 SAHI 框架的兼容性参数，适配所有 Ultralytics PT 格式权重
         self.model = AutoDetectionModel.from_pretrained(
-            model_type='yolov8', 
+            model_type='yolov8',
             model_path=str(model_path),
             confidence_threshold=0.25, 
             device=self.device, 

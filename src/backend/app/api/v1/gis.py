@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import DiseaseRecord, User
+from app.db.models import DiseaseRecord, DiseaseCluster, User
 from app.schemas.disease import DailyCount, DiseaseRecordOut, StatsOut
 from app.api.deps import get_current_user # 引入路由守卫
 
@@ -72,12 +72,28 @@ async def update_record_status(
     if worker_name is not None:
         record.worker_name = worker_name
 
+    repaired_b64 = None
     if status == "repaired":
         record.repaired_at = datetime.utcnow()
         if repaired_image:
             img_bytes = await repaired_image.read()
             mime = repaired_image.content_type or "image/jpeg"
-            record.repaired_image_b64 = f"data:{mime};base64," + base64.b64encode(img_bytes).decode()
+            repaired_b64 = f"data:{mime};base64," + base64.b64encode(img_bytes).decode()
+            record.repaired_image_b64 = repaired_b64
+
+    # 同步更新 disease_clusters 主实体
+    if record.cluster_id:
+        cluster = db.query(DiseaseCluster).filter(
+            DiseaseCluster.cluster_id == record.cluster_id
+        ).first()
+        if cluster:
+            cluster.status = status
+            if worker_name:
+                cluster.worker_id = current_user.id
+            if status == "repaired":
+                cluster.repaired_at = record.repaired_at
+                if repaired_b64:
+                    cluster.repaired_image_b64 = repaired_b64
 
     db.commit()
     db.refresh(record)

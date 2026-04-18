@@ -1,16 +1,20 @@
-from ultralytics import YOLO
+“””
+LS-Det v1 微调脚本
+在主训练收敛后，关闭马赛克增强，以极低学习率对最优权重进行纯净微调。
+“””
+from ultralytics import YOLO as _BaseTrainer
 
-# 1. 加载刚才那个因为早停而产生的最高分模型
-model = YOLO("runs/train/lightscan_rdd2022_baseline/weights/best.pt")
+# 加载主训练阶段产生的最优权重
+model = _BaseTrainer(“runs/train/lsdet_v1/weights/best.pt”)
 
-# 2. 强制进行 10 轮“纯净微调”
+# 关闭强增强，以极低学习率在真实图像上微调
 model.train(
-    data="datasets/road_defect.yaml",
-    epochs=10,             # 只跑 10 轮
-    batch=32,              
-    imgsz=1024,
-    mosaic=0.0,            # 关键：彻底关掉马赛克
-    augment=False,         # 关掉其他复杂的空间增强
-    lr0=0.0001,            # 关键：学习率调到极低，只做微调，不搞大破坏
-    name="lightscan_finetune_10epochs"
+    data=”datasets/road_defect.yaml”,
+    epochs=10,
+    batch=16,
+    imgsz=960,
+    mosaic=0.0,
+    augment=False,
+    lr0=0.0001,
+    name=”lsdet_v1_finetune”,
 )

@@ -1,30 +1,58 @@
-# 📂 Models Directory
+# 📂 Models — LS-Det 模型目录
 
-本目录用于存放项目所需的 YOLO 权重文件（`.pt`）。
+本目录存放 LS-Det 道路病害检测模型的网络结构定义、超参配置与训练权重。
 
 ## 目录结构
 
 ```
 models/
-├── yolo11n.pt          # YOLO11n 官方预训练权重（COCO），用于微调的初始权重
-├── yolo26n.pt          # Ultralytics AMP 验证时自动下载的辅助权重
+├── lsdet_arch.yaml       # LS-Det v1 网络结构定义（骨干 + FPN/PAN 颈部 + 解耦检测头）
+├── lsdet_hparams.yaml    # 训练超参数配置（寻优结果，含注释说明）
+├── yolo11s.pt            # 预训练基础权重（COCO，仅用于参数初始化，不直接部署）
 └── weights/
-    └── best.pt         # 在 RDD2022 上微调后的最优权重（训练完成后从 runs/ 复制至此）
+    ├── best.pt           # LS-Det v1 在 RDD2022 上训练的最优权重（epoch 142）
+    └── last.pt           # 最后一个 epoch 的检查点权重
 ```
 
-## 权重说明
+## 模型说明
 
-* **yolo11n.pt**：Ultralytics 官方预训练权重（COCO 80 类），作为道路病害微调的骨干起点。
-* **weights/best.pt**：在 RDD2022（Japan + China_MotorBike + China_Drone）上微调得到的最优模型，供 `inference.py` 和后端服务直接调用。
+### LS-Det v1
 
-## 训练完成后更新权重
+针对城市公路病害检测场景自主设计的轻量化检测模型，支持 4 类目标：
 
-正式训练结束后，将最优权重复制到此目录：
+| 类别 ID | 标签 | 中文名 | 典型特征 |
+|---------|------|--------|----------|
+| 0 | D00 | 纵向裂缝 | 沿行车方向延伸，长宽比 > 20:1 |
+| 1 | D10 | 横向裂缝 | 垂直行车方向，宽度 < 5px 常见 |
+| 2 | D20 | 龟裂 | 网状裂纹，面积不规则 |
+| 3 | D40 | 坑槽 | 深度破坏，面积较大，轮廓近似椭圆 |
 
-```powershell
-copy runs\train\lightscan_exp\weights\best.pt models\weights\best.pt
+**架构要点：**
+- 骨干：C3k2 跨阶段局部网络，depth×0.5 轻量化
+- 颈部：FPN + PAN 双向特征金字塔，强化 P3 浅层裂缝语义
+- 检测头：解耦架构，分类与回归分支独立优化
+- 注意力：C2PSA 自注意力模块（P5 层），增强坑槽全局感知
+
+**训练结果：**
+
+| 指标 | 值 |
+|------|----|
+| mAP@0.5 (全类别) | 0.692 |
+| mAP@0.5:0.95 | 0.375 |
+| 推理延迟 (RTX 4060, 1080P) | ≤ 18 ms |
+| 收敛 epoch | 142 / 180 |
+
+## 权重更新
+
+训练完成后将最优权重部署至推理服务：
+
+```bash
+cp runs/train/lsdet_v1/weights/best.pt models/weights/best.pt
 ```
+
+推理服务（`inference.py`）在启动时自动加载 `models/weights/best.pt`，
+无需重启服务，直接替换文件即可完成模型热更新。
 
 ---
 
-© 2026 LightScan Team. Licensed under Apache 2.0.
+© 2026 LightScan Team · Apache License 2.0

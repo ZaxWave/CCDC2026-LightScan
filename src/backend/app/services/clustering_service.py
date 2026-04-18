@@ -31,12 +31,13 @@ clustering_service.py
 
 import math
 import uuid
+from datetime import datetime
 from typing import Optional
 
 import numpy as np
 from sqlalchemy.orm import Session
 
-from app.db.models import DiseaseRecord
+from app.db.models import DiseaseRecord, DiseaseCluster
 
 # ── 超参数 ────────────────────────────────────────────────────────────────────
 SPATIAL_THRESHOLD_M  = 5.0   # 空间合并阈值（米）
@@ -79,24 +80,15 @@ def assign_cluster(
     db: Session,
 ) -> str:
     """
-    为新检测记录分配聚类 ID。
+    为新检测记录分配聚类 ID，同步维护 disease_clusters 主实体表。
 
-    Parameters
-    ----------
-    lat, lng        : 记录的 GPS 坐标
-    label_cn        : 病害中文类型（必须与候选记录一致才考虑合并）
-    feature_vector  : 32 维 HSV 直方图特征（可为 None）
-    db              : SQLAlchemy Session
-
-    Returns
-    -------
-    str : UUID 字符串，若与已有簇合并则返回该簇 ID，否则返回新 UUID。
+    Returns: UUID 字符串（已有簇 ID 或新建簇 ID）。
     """
-    # 无坐标信息 → 无法聚类，直接新建
     if not lat or not lng or (lat == 0.0 and lng == 0.0):
-        return str(uuid.uuid4())
+        cid = str(uuid.uuid4())
+        _upsert_cluster(cid, label_cn, lat or 0.0, lng or 0.0, db, is_new=True)
+        return cid
 
-    # 粗筛：以 10 m 为粗框查找同类型已有聚类记录（覆盖精确阈值的 2 倍）
     delta_lat = 10.0 / 111_111.0
     delta_lng = 10.0 / (111_111.0 * math.cos(math.radians(lat)))
 
@@ -120,36 +112,66 @@ def assign_cluster(
     for cand in candidates:
         dist_m = _haversine_m(lat, lng, cand.lat, cand.lng)
 
-        # ── 关卡 1：空间距离检查 ──────────────────────────────
         has_visual = (feature_vector and cand.feature_vector
                       and len(feature_vector) > 0 and len(cand.feature_vector) > 0)
 
         if has_visual:
-            visual_score = _cosine_sim(feature_vector, cand.feature_vector)
-            # 视觉强匹配时允许更宽松的空间范围
+            visual_score  = _cosine_sim(feature_vector, cand.feature_vector)
             spatial_limit = SPATIAL_RELAXED_M if visual_score >= VISUAL_STRONG else SPATIAL_THRESHOLD_M
-            if dist_m > spatial_limit:
+            if dist_m > spatial_limit or visual_score < VISUAL_WEAK:
                 continue
-            if visual_score < VISUAL_WEAK:
-                continue  # 视觉差异过大，拒绝合并
-
-            # ── 关卡 2：融合评分 ─────────────────────────────
             spatial_score = 1.0 - (dist_m / spatial_limit)
-            combined = ALPHA * spatial_score + BETA * visual_score
+            combined      = ALPHA * spatial_score + BETA * visual_score
         else:
-            # 无特征向量：纯空间判断
             if dist_m > SPATIAL_THRESHOLD_M:
                 continue
             spatial_score = 1.0 - (dist_m / SPATIAL_THRESHOLD_M)
-            visual_score  = 0.0
-            combined = spatial_score * 0.9   # 纯空间置信度打九折
+            combined      = spatial_score * 0.9
 
         if combined > best_score:
             best_score      = combined
             best_cluster_id = cand.cluster_id
 
     if best_cluster_id and best_score >= MERGE_THRESHOLD:
+        _upsert_cluster(best_cluster_id, label_cn, lat, lng, db, is_new=False)
         return best_cluster_id
 
-    # 未找到满足条件的候选 → 创建新簇
-    return str(uuid.uuid4())
+    new_cid = str(uuid.uuid4())
+    _upsert_cluster(new_cid, label_cn, lat, lng, db, is_new=True)
+    return new_cid
+
+
+def _upsert_cluster(
+    cluster_id: str,
+    label_cn: str,
+    lat: float,
+    lng: float,
+    db: Session,
+    is_new: bool,
+) -> None:
+    """创建或更新 disease_clusters 实体行。"""
+    now = datetime.utcnow()
+    existing = db.query(DiseaseCluster).filter(
+        DiseaseCluster.cluster_id == cluster_id
+    ).first()
+
+    if existing is None:
+        cluster = DiseaseCluster(
+            cluster_id        = cluster_id,
+            label_cn          = label_cn,
+            canonical_lat     = lat,
+            canonical_lng     = lng,
+            status            = "pending",
+            detection_count   = 1,
+            first_detected_at = now,
+            last_detected_at  = now,
+        )
+        db.add(cluster)
+    else:
+        # 合并：更新质心坐标（滑动均值）和计数
+        n = existing.detection_count
+        existing.canonical_lat   = (existing.canonical_lat * n + lat) / (n + 1)
+        existing.canonical_lng   = (existing.canonical_lng * n + lng) / (n + 1)
+        existing.detection_count = n + 1
+        existing.last_detected_at = now
+    # 不提交：由调用方（路由层）统一 commit
