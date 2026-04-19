@@ -3,7 +3,7 @@ import s from './AboutPanel.module.css';
 // ── 数据定义 ────────────────────────────────────────────────
 
 const TECH_STACK = [
-  { group: 'AI Engine',       items: ['YOLOv8n  (road defect detection)', 'Swin Transformer  (feature backbone)', 'TensorRT  (inference acceleration)'] },
+  { group: 'AI Engine',       items: ['LS-Det v1  (road defect detection)', 'SAHI  (slicing aided hyper inference)', 'DeepSeek-V3  (report & advice generation)'] },
   { group: 'Frontend',        items: ['React 18 + Vite 5', 'AMap JS API 2.0  (GIS / heatmap)', 'ECharts 5  (data visualization)'] },
   { group: 'Backend',         items: ['FastAPI 0.111  (async REST)', 'PostgreSQL 15 + SQLAlchemy 2', 'Uvicorn  (ASGI server)'] },
   { group: 'LLM Integration', items: ['DeepSeek-V3  (report generation)', 'OpenAI-compatible  Chat Completions API'] },
@@ -14,7 +14,7 @@ const INNOVATIONS = [
   {
     tag: 'INV-01',
     title: '轻量化边缘检测',
-    desc: '基于 YOLOv8n 的剪枝蒸馏模型，推理延迟 < 30 ms/帧，可部署于嵌入式巡检设备与无人机边缘节点。',
+    desc: '基于 LS-Det v1 深度可分离卷积架构，参数量较基线压缩约 40%，推理延迟 < 40 ms/帧，支持 SAHI 自适应切片以提升小目标召回。',
   },
   {
     tag: 'INV-02',
@@ -40,7 +40,7 @@ const INNOVATIONS = [
 
 const TEAM = [
   { role: 'Project Lead / Full-Stack',  name: 'ZaxWave',    note: 'Architecture · Backend · Frontend' },
-  { role: 'AI Model Engineering',       name: 'Team AI',     note: 'YOLOv8 Training · Dataset Annotation' },
+  { role: 'AI Model Engineering',       name: 'Team AI',     note: 'LS-Det Training · Dataset Annotation' },
   { role: 'GIS & Visualization',        name: 'Team GIS',    note: 'AMap Integration · ECharts Dashboard' },
   { role: 'UI / UX Design',             name: 'Team Design', note: 'Industrial Minimal Design System' },
 ];
@@ -88,7 +88,7 @@ export default function AboutPanel() {
         <div className={s.heroRight}>
           <div className={s.sysProfile}>
             <div className={s.sysRow}><span className={s.sysKey}>BUILD</span><span className={s.sysVal}>2026.04.16-stable</span></div>
-            <div className={s.sysRow}><span className={s.sysKey}>MODEL</span><span className={s.sysVal}>YOLOv8n · mAP@0.5 = 74.3%</span></div>
+            <div className={s.sysRow}><span className={s.sysKey}>MODEL</span><span className={s.sysVal}>LS-Det v1 · mAP@0.5 = 69.2%</span></div>
             <div className={s.sysRow}><span className={s.sysKey}>CLASSES</span><span className={s.sysVal}>D00 / D10 / D20 / D40</span></div>
             <div className={s.sysRow}><span className={s.sysKey}>LICENSE</span><span className={s.sysVal}>Academic / Competition Use Only</span></div>
             <div className={s.sysRow}><span className={s.sysKey}>RUNTIME</span><span className={s.sysVal}>Python 3.11 + FastAPI + React 18</span></div>
@@ -156,10 +156,10 @@ export default function AboutPanel() {
                   <span className={s.archLayerLabel}>Data Layer</span>
                   <span className={s.archLayerDetail}>PostgreSQL · File Storage</span>
                 </div>
-                <div className={s.archArrow}>↓ ONNX / TensorRT</div>
+                <div className={s.archArrow}>↓ Ultralytics PT / SAHI</div>
                 <div className={s.archLayer} style={{ borderColor: '#d97706' }}>
                   <span className={s.archLayerLabel}>AI Inference Layer</span>
-                  <span className={s.archLayerDetail}>YOLOv8n · Swin Transformer</span>
+                  <span className={s.archLayerDetail}>LS-Det v1 · SAHI · ReID Clustering</span>
                 </div>
               </div>
             </div>
@@ -209,7 +209,7 @@ export default function AboutPanel() {
         <div className={s.footerCopy}>
           © 2026 LightScan Team · CCDC2026 · All rights reserved.
           &nbsp;·&nbsp; Build <span className={s.mono}>2026.04.16</span>
-          &nbsp;·&nbsp; Model checkpoint <span className={s.mono}>yolov8n-road-v4.pt</span>
+          &nbsp;·&nbsp; Model checkpoint <span className={s.mono}>lsdet_v1_best.pt</span>
         </div>
       </div>
 
