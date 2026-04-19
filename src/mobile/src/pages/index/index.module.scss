@@ -92,21 +92,15 @@
 }
 
 .entryTag {
-  padding: 6px 18px;
-  border-radius: 8px;   // 4dp
-  background: #f4f4f4;
-  border: 1px solid #eeeeee;
+  padding: 4px 0;
 }
 
-.entryTagBlue {
-  background: rgba(62, 106, 225, 0.07);
-  border-color: rgba(62, 106, 225, 0.18);
-}
+.entryTagBlue {}
 
 .entryTagText {
-  font-size: 22px;   // 11dp
-  font-weight: 600;
-  color: #5c5e62;
+  font-size: 22px;
+  font-weight: 500;
+  color: #9a9a9e;
 }
 
 .entryTagTextBlue {

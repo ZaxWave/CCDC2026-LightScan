@@ -8,6 +8,8 @@ video_service.py
 """
 
 import base64
+import bisect
+import math
 import re
 import tempfile
 import time
@@ -284,6 +286,124 @@ def detect_video_ocr(
                 frame_idx += 1
 
     return {"status": "ok", "results": results, "total_frames": len(results)}
+
+
+# ── GPS 轨迹工具函数 ───────────────────────────────────────────────────────
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Haversine 公式计算两个 GPS 点之间的距离（米）。"""
+    R = 6_371_000.0
+    φ1, φ2 = math.radians(lat1), math.radians(lat2)
+    dφ = math.radians(lat2 - lat1)
+    dλ = math.radians(lng2 - lng1)
+    a = math.sin(dφ / 2) ** 2 + math.cos(φ1) * math.cos(φ2) * math.sin(dλ / 2) ** 2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def _interp_value(t: float, times: list[float], values: list[float]) -> float:
+    """在有序时间序列上对单个数值列做线性插值。"""
+    if t <= times[0]:
+        return values[0]
+    if t >= times[-1]:
+        return values[-1]
+    i = bisect.bisect_right(times, t) - 1
+    ratio = (t - times[i]) / (times[i + 1] - times[i])
+    return values[i] + ratio * (values[i + 1] - values[i])
+
+
+def detect_video_gps(
+    video_bytes: bytes,
+    gps_track: list[dict],
+    interval_meters: float = 5.0,
+) -> list[dict]:
+    """
+    GPS 轨迹导引抽帧模式。
+
+    录制时移动端每秒记录一个 GPS 点，构成轨迹。本函数根据轨迹计算
+    累计行驶距离，每隔 interval_meters 提取一帧推理，并将插值得到的
+    真实经纬度写入结果，替代 EXIF 或模拟坐标。
+
+    Parameters
+    ----------
+    video_bytes     : 视频原始字节
+    gps_track       : [{lat, lng, timestamp_ms, speed_kmh}, ...] 移动端上传的轨迹
+    interval_meters : 每隔多少米抽一帧（默认 5m）
+
+    Returns
+    -------
+    list of frame result dicts，每项含 location: {lat, lng} 真实坐标
+    """
+    if len(gps_track) < 2:
+        raise ValueError("GPS 轨迹至少需要 2 个点")
+
+    # 按时间戳排序
+    track = sorted(gps_track, key=lambda p: p["timestamp_ms"])
+    t0_ms = track[0]["timestamp_ms"]                        # 录制开始的绝对时间（ms）
+
+    # 构建累计距离数组和相对时间数组（秒）
+    track_times_s: list[float] = [0.0]
+    cumul_dists:   list[float] = [0.0]
+    for i in range(1, len(track)):
+        dt_s = (track[i]["timestamp_ms"] - track[i - 1]["timestamp_ms"]) / 1000.0
+        d_m  = _haversine_m(
+            track[i - 1]["lat"], track[i - 1]["lng"],
+            track[i]["lat"],     track[i]["lng"],
+        )
+        track_times_s.append(track_times_s[-1] + max(dt_s, 0.0))
+        cumul_dists.append(cumul_dists[-1] + d_m)
+
+    lats   = [p["lat"] for p in track]
+    lngs   = [p["lng"] for p in track]
+    speeds = [max(p.get("speed_kmh", 30.0), 1.0) for p in track]   # 至少 1 km/h 防除零
+
+    results: list[dict] = []
+
+    with _open_video(video_bytes) as cap:
+        fps          = cap.get(cv2.CAP_PROP_FPS) or 30.0
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        max_video_s  = total_frames / fps
+        max_gps_s    = track_times_s[-1]
+        cover_s      = min(max_video_s, max_gps_s)   # 以较短者为准
+
+        next_dist_m = 0.0
+        frame_idx   = 0
+
+        while frame_idx < total_frames and len(results) < MAX_FRAMES:
+            frame_time_s = frame_idx / fps
+            if frame_time_s > cover_s:
+                break
+
+            curr_dist_m = _interp_value(frame_time_s, track_times_s, cumul_dists)
+
+            if curr_dist_m >= next_dist_m:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
+                ret, frame = cap.read()
+                if not ret:
+                    break
+
+                # 插值真实经纬度
+                interp_lat = _interp_value(frame_time_s, track_times_s, lats)
+                interp_lng = _interp_value(frame_time_s, track_times_s, lngs)
+
+                extracted_n = len(results) + 1
+                frame_name  = f"gps_frame_{extracted_n:04d}_{int(curr_dist_m)}m.jpg"
+
+                res = run_detect(_frame_to_bytes(frame))
+                res["filename"] = frame_name
+                res["location"] = {"lat": interp_lat, "lng": interp_lng}
+                results.append(res)
+
+                next_dist_m += interval_meters
+
+                # 跳帧：利用当前速度预估下一抽帧位置
+                speed_kmh    = _interp_value(frame_time_s, track_times_s, speeds)
+                speed_ms     = speed_kmh / 3.6
+                frames_ahead = max(1, int(interval_meters / speed_ms * fps * 0.85))
+                frame_idx   += frames_ahead
+            else:
+                frame_idx += 1
+
+    return results
 
 
 def detect_video_timed(

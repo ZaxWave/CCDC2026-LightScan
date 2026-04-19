@@ -2,20 +2,24 @@
 
 此目录用于存放 LS-Det 模型训练数据集。
 
-## 📊 训练数据集
+## 📊 数据集使用状态
 
-| 数据集 | 子集 | 样本量 | 说明 |
+### 当前使用（合并数据集）
+
+| 数据集 | 来源格式 | 样本量 | 说明 |
 | :--- | :--- | ---: | :--- |
-| **RDD2022** | Japan | ~8,600 张 | 日本路面，样本量最大，标注质量高 |
-| **RDD2022** | China_MotorBike | ~1,400 张 | 中国摩托车视角，贴近国内实际场景 |
-| **RDD2022** | China_Drone | ~1,800 张 | 中国无人机俯视角，补充垂直视角样本 |
-| **CROWD** | 城市行车记录仪 | — | 行车记录仪连续帧，辅助增广多样性 |
+| **RDD2022** Japan | VOC XML | ~10,500 张 | 日本路面，标注质量高 |
+| **RDD2022** China_MotorBike | VOC XML | ~1,977 张 | 中国摩托车视角 |
+| **SVRDD v1** | YOLO 7类 | ~8,000 张 | 北京街景道路病害数据集 |
 
-转换后合并输出至 `RDD2022_lsdet/`，共 **11,753** 张有效图片，按 8:2 划分 train/val。
+合并输出至 `merged/`，共约 **20,500** 张，按 8:2 划分 train/val。
 
-类别定义（4 类）：`D00` 纵向裂缝 · `D10` 横向裂缝 · `D20` 龟裂 · `D40` 坑槽
+类别定义（4 类，统一标准）：`D00` 纵向裂缝 · `D10` 横向裂缝 · `D20` 龟裂 · `D40` 坑槽
 
-转换脚本：`tools/convert_voc_to_yolo.py` · 数据集配置：`road_defect.yaml`
+SVRDD 类别映射：Alligator Crack→D20 · Longitudinal Crack→D00 · Transverse Crack→D10 · Pothole→D40
+忽略类别：Longitudinal Patch · Transverse Patch · Manhole Cover
+
+合并脚本：`tools/merge_datasets.py` · 数据集配置：`merged/data.yaml`
 
 ## 📦 备用数据集（未使用）
 

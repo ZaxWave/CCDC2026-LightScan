@@ -122,6 +122,7 @@ app.db
 # AI Tool Generated Files
 # ============================================
 .claude/
+CLAUDE.md
 DESIGN.md
 .copilot/
 

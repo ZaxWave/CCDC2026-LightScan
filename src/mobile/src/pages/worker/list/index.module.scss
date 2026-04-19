@@ -1,29 +1,22 @@
 .page {
-  height: 100vh;
+  min-height: 100vh;
+  background: #f8f8f8;
   display: flex;
   flex-direction: column;
-  background: #f8f8f8;
-  overflow: hidden;
 }
 
-// ── 固定顶部 ────────────────────────────────────────────
-.fixedTop {
-  flex-shrink: 0;
-  background: #ffffff;
-  border-bottom: 1px solid #eeeeee;
-  padding: 72px 48px 0;
-}
-
-.topBar {
+.header {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 36px;
+  padding: 88px 48px 40px;
+  background: #ffffff;
+  border-bottom: 1px solid #eeeeee;
 }
 
 .greeting {
   display: block;
-  font-size: 48px;   // 24dp
+  font-size: 52px;
   font-weight: 700;
   color: #171a20;
   letter-spacing: -1px;
@@ -47,168 +40,65 @@
   color: #9a9a9e;
 }
 
-// ── 统计条 ──────────────────────────────────────────────
-.stats {
-  display: flex;
-  border-top: 1px solid #eeeeee;
-}
-
-.statItem {
-  flex: 1;
-  padding: 28px 16px;
+// ── 大卡片 ───────────────────────────────────────────────
+.tiles {
+  padding: 40px 40px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  border-right: 1px solid #eeeeee;
-  &:last-child { border-right: none; }
-  &:active { background: #fafafa; }
+  gap: 24px;
 }
 
-.statNum {
-  font-size: 52px;
-  font-weight: 800;
-  color: #171a20;
-  line-height: 1;
-}
-
-.statLabel {
-  font-size: 22px;
-  color: #9a9a9e;
-}
-
-// ── 筛选栏 ──────────────────────────────────────────────
-.filterBar {
+.tile {
   display: flex;
-  gap: 0;
-  padding: 20px 48px;
-  border-bottom: 1px solid #eeeeee;
-  background: #ffffff;
-}
-
-.filterTab {
-  padding: 14px 28px;
-  border-radius: 8px;
-  &:active { opacity: 0.6; }
-}
-
-.filterTabOn {
-  background: #3e6ae1;
-}
-
-.filterTabText {
-  font-size: 26px;
-  color: #9a9a9e;
-  font-weight: 500;
-}
-
-.filterTabOn .filterTabText {
-  color: #ffffff;
-  font-weight: 600;
-}
-
-// ── 列表 ────────────────────────────────────────────────
-.listScroll {
-  flex: 1;
-  height: 0;
-}
-
-.list {
-  padding: 20px 40px 0;
-}
-
-.taskCard {
+  align-items: center;
+  gap: 32px;
+  padding: 48px 44px;
   background: #ffffff;
   border: 1px solid #eeeeee;
-  border-radius: 16px;   // 8dp
-  padding: 36px 36px;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+  border-radius: 20px;
+  &:active { opacity: 0.75; }
 }
 
-.taskTop {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.tileDark {
+  background: #171a20;
+  border-color: #171a20;
 }
 
-.taskId {
-  font-size: 22px;
-  color: #c8c8cc;
-  font-family: 'Courier New', monospace;
-}
-
-.statusBadge {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 18px;
-  border-radius: 6px;
-  border: 1px solid;
-}
-
-.statusDot {
-  width: 10px;
-  height: 10px;
+.recDot {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
+  background: #ef4444;
   flex-shrink: 0;
 }
 
-.statusText {
-  font-size: 22px;
-  font-weight: 600;
-}
-
-.taskMain {
+.tileBody {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.taskType {
-  font-size: 36px;
+.tileTitle {
+  font-size: 40px;
   font-weight: 700;
   color: #171a20;
+  letter-spacing: -0.5px;
 }
 
-.levelText {
-  font-size: 24px;
-  font-weight: 600;
-}
+.tileTitleLight { color: #ffffff; }
 
-.taskLocation {
+.tileDesc {
   font-size: 26px;
-  color: #5c5e62;
-  line-height: 1.5;
+  color: #9a9a9e;
 }
 
-.taskBottom {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 16px;
-  border-top: 1px solid #f4f4f4;
-}
+.tileDescLight { color: rgba(255, 255, 255, 0.45); }
 
-.taskTime {
-  font-size: 24px;
+.tileArrow {
+  font-size: 56px;
   color: #c8c8cc;
+  line-height: 1;
 }
 
-.actionText {
-  font-size: 24px;
-  color: #3e6ae1;
-  font-weight: 600;
-}
-
-.empty {
-  display: block;
-  text-align: center;
-  font-size: 28px;
-  color: #c8c8cc;
-  padding: 120px 0;
-}
-
-.listPad { height: 60px; }
+.tileArrowLight { color: rgba(255, 255, 255, 0.35); }

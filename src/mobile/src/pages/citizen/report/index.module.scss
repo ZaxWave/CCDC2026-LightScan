@@ -2,7 +2,7 @@
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: #f8f8f8;
+  background: #ffffff;
   overflow: hidden;
 }
 
@@ -54,15 +54,14 @@
 }
 
 .body {
-  padding: 40px 40px 80px;
+  padding: 0 0 80px;
 }
 
 .section {
   background: #ffffff;
-  border: 1px solid #eeeeee;
-  border-radius: 16px;
-  padding: 40px 40px;
-  margin-bottom: 20px;
+  padding: 40px;
+  margin-bottom: 0;
+  border-bottom: 1px solid #eeeeee;
 }
 
 .secHeader {
@@ -91,30 +90,75 @@
 
 .typeItem {
   border: 1px solid #eeeeee;
-  border-radius: 12px;
+  border-radius: 4px;
   padding: 28px 12px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  background: #fafafa;
+  justify-content: center;
+  background: #ffffff;
   &:active { opacity: 0.6; }
 }
 
 .typeItemActive {
+  background: #3e6ae1;
   border-color: #3e6ae1;
-  background: rgba(62, 106, 225, 0.05);
 }
 
-.typeItemIcon { font-size: 40px; line-height: 1; }
-
 .typeItemLabel {
-  font-size: 24px;
+  font-size: 26px;
+  color: #393c41;
+  font-weight: 500;
+}
+
+.typeItemActive .typeItemLabel {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+// ── 模式切换 ─────────────────────────────────────────────
+.modeSwitch {
+  display: flex;
+  border: 1px solid #eeeeee;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 24px;
+}
+
+.modeBtn {
+  flex: 1;
+  padding: 22px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  &:active { opacity: 0.6; }
+  & + & { border-left: 1px solid #eeeeee; }
+}
+
+.modeBtnOn {
+  background: #171a20;
+}
+
+.modeBtnText {
+  font-size: 26px;
   color: #5c5e62;
   font-weight: 500;
 }
 
-.typeItemActive .typeItemLabel { color: #3e6ae1; font-weight: 600; }
+.modeBtnOn .modeBtnText {
+  color: #ffffff;
+}
+
+// ── AI 状态 ───────────────────────────────────────────────
+.aiStatus {
+  padding: 28px 0;
+  border-top: 1px solid #f4f4f4;
+}
+
+.aiStatusText {
+  font-size: 26px;
+  color: #8e8e8e;
+}
 
 .photoGrid {
   display: flex;
@@ -185,23 +229,24 @@
 }
 
 .submitBtn {
-  height: 108px;
-  border-radius: 16px;
+  height: 88px;
+  border-radius: 4px;
   background: #3e6ae1;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 8px 0 24px;
-  &:active { opacity: 0.8; }
+  margin: 40px 40px 24px;
+  transition: background-color 0.33s;
+  &:active { opacity: 0.85; }
 }
 
 .submitBtnLoading { opacity: 0.65; }
 
 .submitText {
-  font-size: 32px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 500;
   color: #fff;
-  letter-spacing: 4px;
+  letter-spacing: 2px;
 }
 
 .privacy {
@@ -210,4 +255,5 @@
   text-align: center;
   line-height: 1.6;
   display: block;
+  padding: 0 40px;
 }

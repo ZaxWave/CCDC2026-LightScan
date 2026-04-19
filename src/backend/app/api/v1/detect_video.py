@@ -19,6 +19,7 @@ from app.db.database import get_db
 from app.db.models import DiseaseRecord, User
 from app.services.clustering_service import assign_cluster
 from app.services.video_service import (
+    detect_video_gps,
     detect_video_ocr,
     detect_video_timed,
     get_first_frame,
@@ -48,13 +49,16 @@ async def first_frame(file: UploadFile = File(...)):
 @router.post("/detect-video")
 async def detect_video(
     file: UploadFile = File(...),
-    mode: str = Form(..., description="'ocr' 或 'timed'"),
+    mode: str = Form(..., description="'ocr' | 'timed' | 'gps'"),
     interval_meters: float = Form(5.0, description="每隔多少米截一帧"),
     ocr_region: Optional[str] = Form(
         None, description="手动速度区域 'x1,y1,x2,y2'（仅 ocr 模式使用）"
     ),
     approx_speed_kmh: Optional[float] = Form(
         None, description="大致车速 km/h（仅 timed 模式使用）"
+    ),
+    gps_track: Optional[str] = Form(
+        None, description="GPS 轨迹 JSON 字符串（仅 gps 模式使用）"
     ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -75,10 +79,12 @@ async def detect_video(
       ]
     }
     """
-    if mode not in ("ocr", "timed"):
-        raise HTTPException(400, detail="mode 必须为 'ocr' 或 'timed'")
+    if mode not in ("ocr", "timed", "gps"):
+        raise HTTPException(400, detail="mode 必须为 'ocr'、'timed' 或 'gps'")
     if mode == "timed" and approx_speed_kmh is None:
         raise HTTPException(400, detail="timed 模式必须提供 approx_speed_kmh")
+    if mode == "gps" and not gps_track:
+        raise HTTPException(400, detail="gps 模式必须提供 gps_track")
     if interval_meters <= 0:
         raise HTTPException(400, detail="interval_meters 必须大于 0")
 
@@ -106,10 +112,26 @@ async def detect_video(
                 interval_meters=interval_meters,
                 ocr_region=parsed_region,
             )
-        else:
+        elif mode == "timed":
             frames = detect_video_timed(
                 video_bytes,
                 approx_speed_kmh=approx_speed_kmh,
+                interval_meters=interval_meters,
+            )
+            result = {
+                "status":       "ok",
+                "results":      frames,
+                "total_frames": len(frames),
+            }
+        else:  # gps
+            import json as _json
+            try:
+                track = _json.loads(gps_track)
+            except Exception:
+                raise HTTPException(400, detail="gps_track JSON 解析失败")
+            frames = detect_video_gps(
+                video_bytes,
+                gps_track=track,
                 interval_meters=interval_meters,
             )
             result = {

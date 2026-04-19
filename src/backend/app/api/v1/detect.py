@@ -1,4 +1,6 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Depends
+from typing import Optional
+
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Depends
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -17,6 +19,8 @@ MAX_FILES = 20
 async def detect(
     files: list[UploadFile] = File(...),
     conf: float = Query(0.25, ge=0.0, le=1.0, description="置信度阈值"),
+    lat: Optional[float] = Form(None, description="纬度（移动端 GPS 直传，优先于 EXIF）"),
+    lng: Optional[float] = Form(None, description="经度（移动端 GPS 直传，优先于 EXIF）"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)  # 强制要求用户登录并获取身份
 ):
@@ -48,18 +52,18 @@ async def detect(
         # ==========================================
         # 将检测结果持久化到 PostgreSQL
         # ==========================================
-        # 安全提取位置信息（防御空值）
+        # GPS 优先级：移动端直传 > EXIF 解析 > 默认 0.0
         location = res.get("location", {})
-        lat = location.get("lat", 0.0)
-        lng = location.get("lng", 0.0)
+        rec_lat = lat if lat is not None else location.get("lat", 0.0)
+        rec_lng = lng if lng is not None else location.get("lng", 0.0)
 
         for det in res.get("detections", []):
             feature = det.get("feature")
-            cluster_id = assign_cluster(lat, lng, det.get("label_cn"), feature, db)
+            cluster_id = assign_cluster(rec_lat, rec_lng, det.get("label_cn"), feature, db)
             db_record = DiseaseRecord(
                 filename=upload.filename,
-                lat=lat,
-                lng=lng,
+                lat=rec_lat,
+                lng=rec_lng,
                 label=det.get("label"),
                 label_cn=det.get("label_cn"),
                 confidence=det.get("conf"),
@@ -80,7 +84,7 @@ async def detect(
             "detections":   res.get("detections", []),
             "image_b64":    res.get("image_b64", ""),
             "inference_ms": res.get("inference_ms", 0),
-            "location":     location,
+            "location":     {"lat": rec_lat, "lng": rec_lng},
             "timestamp":    res.get("timestamp")
         })
 
