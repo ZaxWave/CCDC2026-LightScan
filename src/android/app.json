@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "LightScan",
+    "slug": "lightscan",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#111111",
+    "android": {
+      "package": "com.lightscan.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "LightScan 需要摄像头权限用于道路巡检录像"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "LightScan 需要位置权限用于记录巡检 GPS 轨迹"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "LightScan 需要相册权限用于上传现场照片"
+        }
+      ],
+      "expo-asset"
+    ]
+  }
+}

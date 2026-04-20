@@ -25,20 +25,36 @@
 | ⚙️ 后端服务 | FastAPI + PostgreSQL | 推理 API、GIS 工单管理、JWT 鉴权、时空聚类 |
 | 🖥️ Web 前端 | React 18 + Vite | 图片/视频检测、高德地图 GIS 大屏、3D 态势感知 |
 | 📱 移动端 | Taro 4 + React | 微信小程序 + H5，市民随手拍 & 巡检员工作台 |
+| 📱 安卓端 | React Native + Expo | 原生安卓 App，支持摄像头实时录像、GPS 轨迹记录 |
 
 ### 训练数据
 
-LS-Det 在两个公开数据集上进行全量训练，共 **11,753 张**标注图像：
+LS-Det 在三个公开数据集上进行全量训练，共 **20,500 张**标注图像：
 
 | 数据集 | 子集 / 来源 | 数量 |
 |--------|------------|------|
-| [RDD2022](https://arxiv.org/abs/2209.08538) — Japan | 日本道路 | 8,588 张 |
-| RDD2022 — China_Drone | 中国无人机航拍 | 1,957 张 |
-| RDD2022 — China_Motorbike | 中国摩托车行车视角 | 1,208 张 |
-| [CROWD](https://doi.org/10.4121/uuid:6b5b5b5b-c2e3-4b5b-a2e3-6b5b5b5b5b5b) | 城市行车记录仪（辅助增广） | — |
-| **合计** | 训练集 / 验证集 = 8:2 | **11,753 张** |
+| [RDD2022](https://arxiv.org/abs/2209.08538) — Japan | 日本道路 | 10,500 张 |
+| RDD2022 — China_Motorbike | 中国摩托车行车视角 | 1,977 张 |
+| SVRDD v1 | 北京街景道路病害数据集 | 8,000 张 |
+| **合计** | 训练集 / 验证集 = 8:2 | **20,500 张** |
 
-训练配置：960×960 输入分辨率，box_loss 权重 7.5，180 epoch，最优权重于第 142 epoch 收敛（RTX 4060）。
+类别定义（4 类）：`D00` 纵向裂缝 · `D10` 横向裂缝 · `D20` 龟裂 · `D40` 坑槽
+
+**训练配置**：
+- 输入分辨率：960×960
+- box_loss 权重：7.5
+- 配置训练轮数：180 epochs
+- 早停策略：patience = 40（连续 40 轮验证 mAP 无提升则终止）
+- **实际训练轮数**：148 epochs（epoch 142 触发早停）
+- **最佳验证结果**：epoch 142，mAP@0.5 = 0.692
+- 硬件：RTX 4090D
+- **实际训练时间**：约 6.67 小时（24,003 秒）
+
+**训练结果文件**：`models/lightscan_model_yolo11s/`
+- 训练曲线、混淆矩阵：见该目录下图片
+- 详细训练日志：`results.csv`
+- 超参数配置：`models/lsdet_hparams.yaml`
+- 数据集说明：`datasets/README.md`
 
 ---
 
@@ -267,6 +283,30 @@ npm run build:weapp
 ```
 
 > **注意**：微信开发者工具调试基础库请选择稳定版（建议 3.4.x），灰度版 3.15.x 存在已知超时兼容问题。
+
+### 4.6 安卓原生端（React Native + Expo）
+
+```bash
+cd src/android
+npm install
+
+# 开发模式（需要 Android Studio + JDK 17+）
+npm start
+# 按 `a` 键在 Android 设备上运行
+
+# 生产构建（APK）
+eas build --platform android --profile preview
+```
+
+**前置要求**：
+- Android Studio 2023.1+
+- JDK 17+
+- 设备启用开发者选项 + USB 调试
+
+**配置**：
+- 摄像头权限：在 app.json 中已配置 expo-camera 权限声明
+- GPS 定位：使用 expo-location
+- 屏幕方向：使用 expo-screen-orientation
 
 ---
 

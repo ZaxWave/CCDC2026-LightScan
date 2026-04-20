@@ -38,6 +38,7 @@ data/processed/
 # ============================================
 src/frontend/node_modules/
 src/mobile/node_modules/
+src/android/node_modules/
 src/frontend/.vite/
 src/frontend/dist/
 src/frontend/build/
