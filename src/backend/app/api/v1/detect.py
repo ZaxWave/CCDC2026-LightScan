@@ -4,7 +4,7 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Query, Dep
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from app.services.inference_service import run_detect
+from app.services.inference_service import run_detect_async
 from app.services.clustering_service import assign_cluster
 from app.db.database import get_db
 from app.db.models import DiseaseRecord, User
@@ -22,10 +22,11 @@ async def detect(
     lat: Optional[float] = Form(None, description="纬度（移动端 GPS 直传，优先于 EXIF）"),
     lng: Optional[float] = Form(None, description="经度（移动端 GPS 直传，优先于 EXIF）"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)  # 强制要求用户登录并获取身份
+    current_user: User = Depends(get_current_user),
 ):
     """
     接收 1–20 张图片，返回每张的检测结果与标注图，并将时空病害数据写入 PostgreSQL 数据库。
+    推理通过专用单线程执行器异步执行，不阻塞事件循环。
     """
     if len(files) > MAX_FILES:
         raise HTTPException(400, detail=f"单次最多上传 {MAX_FILES} 张图片")
@@ -39,8 +40,8 @@ async def detect(
             )
         img_bytes = await upload.read()
         try:
-            # 调用核心推理逻辑 (它现在应该会返回 location 和 timestamp)
-            res = run_detect(img_bytes, conf=conf)
+            # 卸载到专用执行器：CPU 密集型推理不阻塞事件循环
+            res = await run_detect_async(img_bytes, conf=conf)
         except FileNotFoundError:
             raise HTTPException(
                 503,

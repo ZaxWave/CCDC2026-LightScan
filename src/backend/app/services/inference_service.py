@@ -1,6 +1,10 @@
+import asyncio
 import sys
+import threading
 import time
 import base64
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 from pathlib import Path
 
 import cv2
@@ -12,6 +16,11 @@ sys.path.insert(0, str(ROOT))
 from inference import LightScanInference
 from .geo_service import extract_gps_from_image
 from datetime import datetime
+
+# 串行化推理：防止多线程并发导致显存溢出
+_inference_lock = threading.Semaphore(1)
+# 专用单线程执行器，供 async 路由通过 run_in_executor 调用
+_inference_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="lsdet_worker")
 
 # RDD2022 类别中文映射字典
 LABEL_CN = {
@@ -80,13 +89,33 @@ def get_engine() -> LightScanInference:
     return _engine
 
 
+def preload_model() -> None:
+    """由 lifespan 在启动时调用，提前预热模型，消除首次请求延迟。"""
+    get_engine()
+
+
+async def run_detect_async(img_bytes: bytes, conf: float = 0.25) -> dict:
+    """异步包装：将阻塞推理卸载到专用单线程执行器，不阻塞事件循环。"""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        _inference_executor, partial(run_detect, img_bytes, conf=conf)
+    )
+
+
 def run_detect(img_bytes: bytes, conf: float = 0.25) -> dict:
     """
     处理单张图像的推理请求。
     
     包含图像解码、格式转换、调用 SAHI 推理引擎、
     结构化结果解析及目标框的可视化绘制。
+    通过全局信号量保证 GPU 串行执行，防止多线程并发导致显存溢出。
     """
+    with _inference_lock:
+        return _run_detect_impl(img_bytes, conf)
+
+
+def _run_detect_impl(img_bytes: bytes, conf: float = 0.25) -> dict:
+    """实际推理逻辑，由 run_detect 持有锁后调用。"""
     engine = get_engine()
 
     lat, lng = extract_gps_from_image(img_bytes)

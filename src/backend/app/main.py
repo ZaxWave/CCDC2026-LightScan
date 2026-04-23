@@ -1,11 +1,15 @@
+import logging
 import os
 import json
 import warnings
+from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
+
+logger = logging.getLogger("uvicorn.error")
 
 # Load environment variables
 _env_path = Path(__file__).resolve().parents[2] / ".env"
@@ -92,7 +96,26 @@ _migrate_disease_records()
 ROOT = Path(__file__).resolve().parents[3]  # → CCDC2026-LightScan/
 FRONTEND_PUBLIC = ROOT / "src" / "frontend" / "public"
 
-app = FastAPI(title="LightScan API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # ── 启动阶段：预热模型，避免首次请求延迟与显存争抢 ──────────────
+    logger.info("⚡ 预加载 ls-det 推理引擎...")
+    from app.services.inference_service import preload_model
+    preload_model()
+    logger.info("✅ ls-det 模型已就绪")
+
+    yield
+
+    # ── 关闭阶段：优雅释放线程池 ────────────────────────────────────
+    from app.services.inference_service import _inference_executor
+    from app.api.v1.detect_video import _video_executor
+    _inference_executor.shutdown(wait=False)
+    _video_executor.shutdown(wait=False)
+    logger.info("🔒 ls-det 线程池已关闭")
+
+
+app = FastAPI(title="LightScan API", version="0.1.0", lifespan=lifespan)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
 cors_origins_str = os.getenv(

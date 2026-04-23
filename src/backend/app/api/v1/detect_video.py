@@ -1,21 +1,23 @@
 """
-detect_video.py
-/api/v1/detect-video 路由
+detect_video.py  —  /api/v1/detect-video 路由（非阻塞版）
 
-Endpoints:
-  POST /api/v1/detect-video/first-frame  — 返回视频第一帧，供前端画框选区域
-  POST /api/v1/detect-video              — 主推理接口（ocr / timed 两种模式）
+提交任务模型：
+  POST /api/v1/detect-video/first-frame  — 返回第一帧（同步 def，线程池执行）
+  POST /api/v1/detect-video              — 提交任务，立即返回 task_id
+  GET  /api/v1/detect-video/status/{id} — 轮询任务进度与结果
 """
 
+import json as _json
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.db.database import get_db
+from app.db.database import SessionLocal
 from app.db.models import DiseaseRecord, User
 from app.services.clustering_service import assign_cluster
 from app.services.video_service import (
@@ -29,16 +31,108 @@ router = APIRouter(prefix="/api/v1", tags=["detect-video"])
 
 MAX_VIDEO_MB = 500
 
+# ── 任务状态存储（单进程内存，重启后清空）────────────────────────────────
+# key  : task_id (UUID str)
+# value: {"status": "queued|processing|done|failed", "result": {...}, "error": "..."}
+_tasks: dict[str, dict] = {}
+
+# 限制并发视频任务数，防止同时多路推理耗尽显存
+_video_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="video_worker")
+
+
+# ── 后台工作函数 ──────────────────────────────────────────────────────────
+
+def _run_video_task(
+    task_id: str,
+    mode: str,
+    video_bytes: bytes,
+    interval_meters: float,
+    parsed_region: Optional[tuple],
+    approx_speed_kmh: Optional[float],
+    gps_track_json: Optional[str],
+    creator_id: int,
+    source_type: str,
+    device_id: Optional[str],
+) -> None:
+    """
+    在独立线程中执行完整的视频推理流程并持久化结果。
+    所有异常均在此捕获，不向主进程传播，通过 _tasks 记录状态。
+    """
+    _tasks[task_id]["status"] = "processing"
+    try:
+        if mode == "ocr":
+            result = detect_video_ocr(
+                video_bytes,
+                interval_meters=interval_meters,
+                ocr_region=parsed_region,
+            )
+        elif mode == "timed":
+            frames = detect_video_timed(
+                video_bytes,
+                approx_speed_kmh=approx_speed_kmh,
+                interval_meters=interval_meters,
+            )
+            result = {"status": "ok", "results": frames, "total_frames": len(frames)}
+        else:  # gps
+            track = _json.loads(gps_track_json)
+            frames = detect_video_gps(
+                video_bytes,
+                gps_track=track,
+                interval_meters=interval_meters,
+            )
+            result = {"status": "ok", "results": frames, "total_frames": len(frames)}
+
+        # ── 持久化（独立 Session，与 HTTP 请求生命周期解耦）────────────
+        db = SessionLocal()
+        try:
+            for frame in result.get("results", []):
+                location = frame.get("location") or {}
+                lat = location.get("lat", 0.0)
+                lng = location.get("lng", 0.0)
+                raw_ts = frame.get("timestamp")
+                try:
+                    ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
+                except (ValueError, TypeError):
+                    ts = datetime.utcnow()
+
+                for det in frame.get("detections", []):
+                    feature = det.get("feature")
+                    cluster_id = assign_cluster(lat, lng, det.get("label_cn"), feature, db)
+                    db.add(DiseaseRecord(
+                        filename=frame.get("filename"),
+                        lat=lat,
+                        lng=lng,
+                        timestamp=ts,
+                        label=det.get("label"),
+                        label_cn=det.get("label_cn"),
+                        confidence=det.get("conf"),
+                        color_hex=det.get("color"),
+                        bbox=det.get("bbox"),
+                        feature_vector=feature,
+                        cluster_id=cluster_id,
+                        source_type=source_type,
+                        device_id=device_id,
+                        creator_id=creator_id,
+                    ))
+            db.commit()
+        finally:
+            db.close()
+
+        _tasks[task_id] = {"status": "done", "result": result}
+
+    except Exception as exc:
+        _tasks[task_id] = {"status": "failed", "error": str(exc)}
+
+
+# ── 路由 ──────────────────────────────────────────────────────────────────
 
 @router.post("/detect-video/first-frame")
-async def first_frame(file: UploadFile = File(...)):
+def first_frame(file: UploadFile = File(...)):
     """
     读取视频第一帧，返回 base64 data URI 及原始分辨率。
-    供前端在画布上手动框选速度区域使用。
-
-    Response: {"frame_b64": "data:image/jpeg;base64,...", "width": W, "height": H}
+    sync def：FastAPI 自动放入线程池，不阻塞事件循环。
     """
-    video_bytes = await file.read()
+    video_bytes = file.file.read()
     try:
         data = get_first_frame(video_bytes)
     except ValueError as e:
@@ -60,24 +154,15 @@ async def detect_video(
     gps_track: Optional[str] = Form(
         None, description="GPS 轨迹 JSON 字符串（仅 gps 模式使用）"
     ),
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    视频推理主接口。
+    提交视频推理任务，**立即**返回 task_id。
 
-    mode=ocr   : 读取视频内速度字幕，按行驶距离抽帧推理
-    mode=timed : 按估算车速 + 间隔米数计算截帧频率推理
+    前端轮询 GET /api/v1/detect-video/status/{task_id} 获取进度，
+    status 取值：queued → processing → done | failed。
 
-    Response:
-    {
-      "status":       "ok" | "ocr_failed",
-      "total_frames": int,
-      "results": [
-        { "filename", "detections", "image_b64", "inference_ms", "location", "timestamp" },
-        ...
-      ]
-    }
+    Response: {"task_id": "...", "status": "queued"}
     """
     if mode not in ("ocr", "timed", "gps"):
         raise HTTPException(400, detail="mode 必须为 'ocr'、'timed' 或 'gps'")
@@ -92,7 +177,6 @@ async def detect_video(
     if len(video_bytes) / 1024 / 1024 > MAX_VIDEO_MB:
         raise HTTPException(413, detail=f"视频文件超过 {MAX_VIDEO_MB} MB 限制")
 
-    # 解析手动框选的速度区域坐标
     parsed_region = None
     if ocr_region:
         try:
@@ -105,84 +189,41 @@ async def detect_video(
                 400, detail="ocr_region 格式错误，应为 'x1,y1,x2,y2'，例如 '0,720,200,800'"
             )
 
-    try:
-        if mode == "ocr":
-            result = detect_video_ocr(
-                video_bytes,
-                interval_meters=interval_meters,
-                ocr_region=parsed_region,
-            )
-        elif mode == "timed":
-            frames = detect_video_timed(
-                video_bytes,
-                approx_speed_kmh=approx_speed_kmh,
-                interval_meters=interval_meters,
-            )
-            result = {
-                "status":       "ok",
-                "results":      frames,
-                "total_frames": len(frames),
-            }
-        else:  # gps
-            import json as _json
-            try:
-                track = _json.loads(gps_track)
-            except Exception:
-                raise HTTPException(400, detail="gps_track JSON 解析失败")
-            frames = detect_video_gps(
-                video_bytes,
-                gps_track=track,
-                interval_meters=interval_meters,
-            )
-            result = {
-                "status":       "ok",
-                "results":      frames,
-                "total_frames": len(frames),
-            }
+    task_id = str(uuid.uuid4())
+    _tasks[task_id] = {"status": "queued"}
 
-    except FileNotFoundError:
-        raise HTTPException(
-            503, detail="模型权重尚未就绪（best.pt 不存在），请等待训练完成后再试"
-        )
-    except ValueError as e:
-        raise HTTPException(422, detail=str(e))
+    _video_executor.submit(
+        _run_video_task,
+        task_id,
+        mode,
+        video_bytes,
+        interval_meters,
+        parsed_region,
+        approx_speed_kmh,
+        gps_track,
+        current_user.id,
+        current_user.source_type or "manual",
+        current_user.device_id,
+    )
 
-    # ==========================================
-    # 将视频各帧检测结果持久化到 PostgreSQL
-    # ==========================================
-    frame_results = result.get("results", [])
-    for frame in frame_results:
-        location = frame.get("location") or {}
-        lat = location.get("lat", 0.0)
-        lng = location.get("lng", 0.0)
+    return JSONResponse({"task_id": task_id, "status": "queued"})
 
-        raw_ts = frame.get("timestamp")
-        try:
-            ts = datetime.fromisoformat(raw_ts) if raw_ts else datetime.utcnow()
-        except (ValueError, TypeError):
-            ts = datetime.utcnow()
 
-        for det in frame.get("detections", []):
-            feature    = det.get("feature")
-            cluster_id = assign_cluster(lat, lng, det.get("label_cn"), feature, db)
-            db_record  = DiseaseRecord(
-                filename=frame.get("filename"),
-                lat=lat,
-                lng=lng,
-                timestamp=ts,
-                label=det.get("label"),
-                label_cn=det.get("label_cn"),
-                confidence=det.get("conf"),
-                color_hex=det.get("color"),
-                bbox=det.get("bbox"),
-                feature_vector=feature,
-                cluster_id=cluster_id,
-                source_type=current_user.source_type or "manual",
-                device_id=current_user.device_id,
-                creator_id=current_user.id,
-            )
-            db.add(db_record)
+@router.get("/detect-video/status/{task_id}")
+async def detect_video_status(
+    task_id: str,
+    _: User = Depends(get_current_user),
+):
+    """
+    轮询视频推理任务状态。
 
-    db.commit()
-
-    return JSONResponse(content=result)
+    Response:
+      {"status": "queued"}
+      {"status": "processing"}
+      {"status": "done",   "result": { "status", "total_frames", "results": [...] }}
+      {"status": "failed", "error": "..."}
+    """
+    task = _tasks.get(task_id)
+    if task is None:
+        raise HTTPException(404, detail="任务不存在或已过期")
+    return JSONResponse(task)
