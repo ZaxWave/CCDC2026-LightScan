@@ -8,10 +8,14 @@ detect_video.py  —  /api/v1/detect-video 路由（非阻塞版）
 """
 
 import json as _json
+import logging
+import traceback
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from typing import Optional
+
+_log = logging.getLogger("uvicorn.error")
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
@@ -58,29 +62,50 @@ def _run_video_task(
     在独立线程中执行完整的视频推理流程并持久化结果。
     所有异常均在此捕获，不向主进程传播，通过 _tasks 记录状态。
     """
-    _tasks[task_id]["status"] = "processing"
+    _tasks[task_id] = {"status": "processing", "frames_done": 0}
+    print(f"[video:{task_id[:8]}] 任务启动 mode={mode} video={len(video_bytes)//1024}KB", flush=True)
+
+    def _progress(done: int) -> None:
+        if _tasks.get(task_id, {}).get("status") == "processing":
+            _tasks[task_id]["frames_done"] = done
+        print(f"[video:{task_id[:8]}] 已完成 {done} 帧", flush=True)
+
+    def _phase(phase: str) -> None:
+        if _tasks.get(task_id, {}).get("status") == "processing":
+            _tasks[task_id]["phase"] = phase
+        print(f"[video:{task_id[:8]}] 阶段={phase}", flush=True)
+
     try:
+        print(f"[video:{task_id[:8]}] 开始视频处理...", flush=True)
         if mode == "ocr":
             result = detect_video_ocr(
                 video_bytes,
                 interval_meters=interval_meters,
                 ocr_region=parsed_region,
+                progress_cb=_progress,
+                phase_cb=_phase,
             )
         elif mode == "timed":
             frames = detect_video_timed(
                 video_bytes,
                 approx_speed_kmh=approx_speed_kmh,
                 interval_meters=interval_meters,
+                progress_cb=_progress,
             )
             result = {"status": "ok", "results": frames, "total_frames": len(frames)}
         else:  # gps
             track = _json.loads(gps_track_json)
+            _log.info(f"[video:{task_id[:8]}] GPS轨迹点数={len(track)}")
             frames = detect_video_gps(
                 video_bytes,
                 gps_track=track,
                 interval_meters=interval_meters,
+                progress_cb=_progress,
             )
             result = {"status": "ok", "results": frames, "total_frames": len(frames)}
+
+        total = result.get("total_frames", 0)
+        print(f"[video:{task_id[:8]}] 推理完成，共 {total} 帧，写入数据库...", flush=True)
 
         # ── 持久化（独立 Session，与 HTTP 请求生命周期解耦）────────────
         db = SessionLocal()
@@ -118,23 +143,24 @@ def _run_video_task(
         finally:
             db.close()
 
+        print(f"[video:{task_id[:8]}] 任务全部完成", flush=True)
         _tasks[task_id] = {"status": "done", "result": result}
 
     except Exception as exc:
+        print(f"[video:{task_id[:8]}] 任务异常: {exc}\n{traceback.format_exc()}", flush=True)
         _tasks[task_id] = {"status": "failed", "error": str(exc)}
 
 
 # ── 路由 ──────────────────────────────────────────────────────────────────
 
 @router.post("/detect-video/first-frame")
-def first_frame(file: UploadFile = File(...)):
-    """
-    读取视频第一帧，返回 base64 data URI 及原始分辨率。
-    sync def：FastAPI 自动放入线程池，不阻塞事件循环。
-    """
-    video_bytes = file.file.read()
+async def first_frame(file: UploadFile = File(...)):
+    """读取第一帧，返回 base64 data URI 及原始分辨率。"""
+    import asyncio
+    video_bytes = await file.read()
     try:
-        data = get_first_frame(video_bytes)
+        loop = asyncio.get_running_loop()
+        data = await loop.run_in_executor(None, get_first_frame, video_bytes)
     except ValueError as e:
         raise HTTPException(422, detail=str(e))
     return JSONResponse(content=data)

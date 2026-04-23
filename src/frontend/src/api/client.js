@@ -60,6 +60,10 @@ export function detectVideo(file, config) {
   return request('/api/v1/detect-video', form)
 }
 
+export function pollVideoStatus(taskId) {
+  return request(`/api/v1/detect-video/status/${taskId}`, null, 'GET')
+}
+
 export function getGisRecords() {
   return request('/api/v1/gis/records', null, 'GET');
 }

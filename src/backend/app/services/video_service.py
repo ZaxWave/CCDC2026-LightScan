@@ -40,8 +40,9 @@ def _get_ocr_engine():
         
         # 使用移动版模型（精度好 + 速度快 + 内存省）
         _ocr_engine = PaddleOCR(
-            use_angle_cls=False,  # 禁用方向检测（不需要，省内存）
-            lang='en',  # 只需要数字，用英文就够
+            use_angle_cls=False,
+            lang='en',
+            enable_mkldnn=False,  # 禁用 OneDNN，避免 ConvertPirAttribute 不兼容异常
         )
         return _ocr_engine
     except Exception as e:
@@ -50,7 +51,7 @@ def _get_ocr_engine():
 
 
 # ── 常量 ───────────────────────────────────────────────────────────────────
-OCR_INTERVAL = 30    # 每 N 帧做一次 OCR（30fps 下约 1 秒，减少内存消耗）
+OCR_INTERVAL = 90    # 每 N 帧做一次 OCR（30fps 下约 3 秒，减少 OCR 调用次数）
 OCR_PROBES   = 3     # 自动检测速度区域时的采样帧数（减少采样）
 REGION_PAD   = 20    # 自动检测区域时向外扩展的像素边距
 MAX_FRAMES   = 200   # 单次最多推理帧数（进一步限制，防止内存溢出）
@@ -171,46 +172,44 @@ def _auto_detect_speed_region(
     ocr_engine,
 ) -> tuple[int, int, int, int] | None:
     """
-    均匀采样视频若干帧做分块 OCR，寻找速度数字所在区域。
+    采样 2 个探针帧，各对底部 40% 区域做 OCR，寻找速度字幕位置。
+    速度叠加层几乎总在画面底部，聚焦底部可提高识别率且只需 2 次 OCR 调用。
     返回 (x1, y1, x2, y2)，找不到返回 None。
     """
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fw    = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     fh    = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
-    probe_indices = [
-        int(total * i / max(OCR_PROBES - 1, 1))
-        for i in range(OCR_PROBES)
-    ]
+    # 底部 40% 的 y 起点
+    bottom_y = int(fh * 0.6)
 
+    probe_indices = [int(total * 0.25), int(total * 0.75)]
     boxes = []
+
     for idx in probe_indices:
         cap.set(cv2.CAP_PROP_POS_FRAMES, idx)
         ret, frame = cap.read()
         if not ret:
             continue
+        crop = frame[bottom_y:, :]  # 只取底部 40%
+        try:
+            res = ocr_engine.ocr(crop)
+        except Exception as e:
+            print(f"[OCR auto-detect] OCR调用异常: {e}", flush=True)
+            continue
+        print(f"[OCR auto-detect] 帧{idx} 原始结果类型={type(res)} len={len(res) if res else 0} raw={repr(res)[:300]}", flush=True)
+        for text, score, poly in _iter_ocr_items(res):
+            print(f"[OCR auto-detect] score={score:.2f} text={repr(text)}", flush=True)
+            if score > 0.3 and re.search(r"\d+\s*[KX]M.?H", text, re.IGNORECASE):
+                pts = np.array(poly, dtype=np.float32).reshape(-1, 2)
+                boxes.append((
+                    int(pts[:, 0].min()),
+                    bottom_y + int(pts[:, 1].min()),
+                    int(pts[:, 0].max()),
+                    bottom_y + int(pts[:, 1].max()),
+                ))
 
-        # 3×3 分块 OCR，避免小字在全图模式下被漏检
-        for ri in range(3):
-            for ci in range(3):
-                y0, y1_ = ri * fh // 3, (ri + 1) * fh // 3
-                x0, x1_ = ci * fw // 3, (ci + 1) * fw // 3
-                tile = frame[y0:y1_, x0:x1_]
-                try:
-                    res = ocr_engine.ocr(tile)
-                except Exception:
-                    continue
-                for text, score, poly in _iter_ocr_items(res):
-                    if score > 0.3 and re.search(r"\d+\s*[KX]M.?H", text, re.IGNORECASE):
-                        pts = np.array(poly, dtype=np.float32).reshape(-1, 2)
-                        boxes.append((
-                            x0 + int(pts[:, 0].min()),
-                            y0 + int(pts[:, 1].min()),
-                            x0 + int(pts[:, 0].max()),
-                            y0 + int(pts[:, 1].max()),
-                        ))
-
-    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # 重置，避免影响后续逐帧读取
+    cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
 
     if not boxes:
         return None
@@ -229,6 +228,8 @@ def detect_video_ocr(
     video_bytes: bytes,
     interval_meters: float = 5.0,
     ocr_region: tuple[int, int, int, int] | None = None,
+    progress_cb=None,
+    phase_cb=None,
 ) -> dict:
     """
     OCR 距离模式：识别视频内速度字幕，按行驶距离均匀抽帧，逐帧推理。
@@ -244,8 +245,12 @@ def detect_video_ocr(
     {"status": "ok",         "results": [...], "total_frames": N}
     {"status": "ocr_failed", "results": [],    "total_frames": 0}
     """
-    # 获取 OCR 单例（第一次调用时才加载模型）
+    # 获取 OCR 单例（首次调用会加载模型，可能耗时数分钟）
+    if phase_cb:
+        phase_cb("ocr_loading")
     ocr_engine = _get_ocr_engine()
+    if phase_cb:
+        phase_cb("ocr_detecting")
 
     with _open_video(video_bytes) as cap:
         fps            = cap.get(cv2.CAP_PROP_FPS) or 30.0
@@ -253,6 +258,7 @@ def detect_video_ocr(
         secs_per_frame = 1.0 / fps
 
         # 确定速度区域（自动检测或手动指定）
+        print(f"[OCR] 收到 ocr_region={ocr_region} total_frames={total_frames} fps={fps:.1f}", flush=True)
         if ocr_region is None:
             ocr_region = _auto_detect_speed_region(cap, ocr_engine)
             if ocr_region is None:
@@ -265,6 +271,8 @@ def detect_video_ocr(
         speed_ms: float | None = None
         frame_idx       = 0
         last_ocr_idx    = -OCR_INTERVAL  # 强制第一帧做 OCR
+        # 扫描超过 10% 仍未找到速度则认为无速度字幕
+        speed_search_limit = max(int(total_frames * 0.1), OCR_INTERVAL * 3)
 
         while len(results) < MAX_FRAMES and frame_idx < total_frames:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_idx)
@@ -278,14 +286,19 @@ def detect_video_ocr(
                 try:
                     ocr_res = ocr_engine.ocr(crop)
                     kmh     = _extract_speed_kmh(ocr_res)
+                    items   = list(_iter_ocr_items(ocr_res))
+                    print(f"[OCR loop] frame={frame_idx} crop={crop.shape} texts={[t for t,s,_ in items if s>0.3]} kmh={kmh}", flush=True)
                     if kmh is not None:
                         speed_ms = kmh / 3.6
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"[OCR loop] frame={frame_idx} 异常: {e}", flush=True)
                 last_ocr_idx = frame_idx
 
             if speed_ms is None:
-                # 还没识别到速度，逐帧扫描直到找到
+                if frame_idx >= speed_search_limit:
+                    # 扫描了足够多帧仍未识别到速度，放弃
+                    print(f"[video_service] OCR 未在前 {speed_search_limit} 帧内找到速度，返回 ocr_failed")
+                    return {"status": "ocr_failed", "results": [], "total_frames": 0}
                 frame_idx += 1
                 continue
 
@@ -297,9 +310,16 @@ def detect_video_ocr(
             if cumul_m >= next_extract_m:
                 extracted_n = len(results) + 1
                 frame_name  = f"frame_{extracted_n:04d}_{int(next_extract_m)}m.jpg"
-                res         = run_detect(_frame_to_bytes(frame))
+                try:
+                    res = run_detect(_frame_to_bytes(frame))
+                except Exception as e:
+                    print(f"[video_service] ocr frame {len(results)+1} 推理失败，跳过: {e}")
+                    next_extract_m += interval_meters
+                    continue
                 res["filename"] = frame_name
                 results.append(res)
+                if progress_cb:
+                    progress_cb(len(results))
                 next_extract_m += interval_meters
 
                 # ── 跳帧优化：直接跳到下一个预期抽帧位置 ─────────────
@@ -339,6 +359,7 @@ def detect_video_gps(
     video_bytes: bytes,
     gps_track: list[dict],
     interval_meters: float = 5.0,
+    progress_cb=None,
 ) -> list[dict]:
     """
     GPS 轨迹导引抽帧模式。
@@ -412,10 +433,17 @@ def detect_video_gps(
                 extracted_n = len(results) + 1
                 frame_name  = f"gps_frame_{extracted_n:04d}_{int(curr_dist_m)}m.jpg"
 
-                res = run_detect(_frame_to_bytes(frame))
+                try:
+                    res = run_detect(_frame_to_bytes(frame))
+                except Exception as e:
+                    print(f"[video_service] gps frame {len(results)+1} 推理失败，跳过: {e}")
+                    next_dist_m += interval_meters
+                    continue
                 res["filename"] = frame_name
                 res["location"] = {"lat": interp_lat, "lng": interp_lng}
                 results.append(res)
+                if progress_cb:
+                    progress_cb(len(results))
 
                 next_dist_m += interval_meters
 
@@ -434,6 +462,7 @@ def detect_video_timed(
     video_bytes: bytes,
     approx_speed_kmh: float,
     interval_meters: float,
+    progress_cb=None,
 ) -> list[dict]:
     """
     时间估算模式：根据大致车速和目标间隔米数计算截帧频率，直接跳帧推理。
@@ -469,9 +498,16 @@ def detect_video_timed(
             extracted_n += 1
             est_dist_m   = int(target_idx / fps * speed_ms)
             frame_name   = f"frame_{extracted_n:04d}_{est_dist_m}m.jpg"
-            res          = run_detect(_frame_to_bytes(frame))
+            try:
+                res = run_detect(_frame_to_bytes(frame))
+            except Exception as e:
+                print(f"[video_service] timed frame {extracted_n} 推理失败，跳过: {e}")
+                target_idx += frame_interval
+                continue
             res["filename"] = frame_name
             results.append(res)
+            if progress_cb:
+                progress_cb(extracted_n)
 
             target_idx += frame_interval
 

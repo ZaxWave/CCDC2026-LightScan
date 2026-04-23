@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import s from './VideoDetectModal.module.css'
 import RegionCanvas from './RegionCanvas'
-import { getFirstFrame, detectVideo } from '../../api/client'
+import { getFirstFrame, detectVideo, pollVideoStatus } from '../../api/client'
 
 const STEPS = {
   SELECT:     'select',
@@ -29,6 +29,8 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
   const [frame,        setFrame]        = useState(null)      // { frame_b64, width, height }
   const [frameLoading, setFrameLoading] = useState(false)
   const [error,        setError]        = useState('')
+  const [pollLabel,    setPollLabel]    = useState('')        // 轮询阶段的状态文案
+  const cancelledRef = useRef(false)                         // 取消轮询标志
 
   // 进入 OCR 配置步时自动预加载第一帧，让用户可直接标注速度区域
   useEffect(() => {
@@ -40,9 +42,51 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
       .finally(() => setFrameLoading(false))
   }, [step, file, frame])
 
+  // 轮询后台任务直到完成（无硬超时，视频长度决定耗时）
+  async function waitForTask(taskId) {
+    const INTERVAL_MS = 3000
+    const startTime   = Date.now()
+
+    while (!cancelledRef.current) {
+      await new Promise(r => setTimeout(r, INTERVAL_MS))
+      if (cancelledRef.current) return null   // 用户主动后台化
+
+      let data
+      try {
+        data = await pollVideoStatus(taskId)
+      } catch (e) {
+        if (e.message.includes('不存在') || e.message.includes('404')) {
+          throw new Error('服务已重启，任务已失效，请重新提交视频')
+        }
+        throw e
+      }
+
+      const elapsed = Math.floor((Date.now() - startTime) / 1000)
+      const min = Math.floor(elapsed / 60)
+      const sec = elapsed % 60
+      const elapsedStr = min > 0 ? `${min}分${sec}秒` : `${sec}秒`
+
+      if (data.status === 'done')   return data.result
+      if (data.status === 'failed') throw new Error(data.error || '后台任务执行失败')
+
+      const framesInfo = data.frames_done > 0 ? `已完成 ${data.frames_done} 帧 · ` : ''
+      const phaseLabel = {
+        ocr_loading:   'OCR 引擎加载中（首次启动约需3分钟）…',
+        ocr_detecting: 'OCR 识别速度区域中…',
+      }[data.phase] ?? null
+      setPollLabel(
+        data.status === 'processing'
+          ? phaseLabel ?? `推理中… ${framesInfo}用时 ${elapsedStr}`
+          : `排队等待… 已等待 ${elapsedStr}`
+      )
+    }
+    return null
+  }
+
   async function submit() {
     setError('')
-    
+    cancelledRef.current = false
+
     // GPS 模式需要先上传轨迹
     if (mode === 'gps' && !gpsFile) {
       setError('请上传 GPS 轨迹 JSON 文件')
@@ -50,6 +94,7 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
     }
 
     setStep(STEPS.PROCESSING)
+    setPollLabel('提交任务中…')
 
     try {
       let gpsTrack = undefined
@@ -59,7 +104,8 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
         gpsTrack = JSON.stringify(data.gps_track || data)
       }
 
-      const data = await detectVideo(file, {
+      // 提交任务，后端立即返回 task_id
+      const { task_id } = await detectVideo(file, {
         mode,
         intervalM,
         speedKmh,
@@ -67,14 +113,20 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
         gpsTrack,
       })
 
-      // OCR 自动识别失败 且 用户没有预标区域 → 回到 OCR 步让用户框选
-      if (data.status === 'ocr_failed') {
+      setPollLabel('任务排队中…')
+
+      // 轮询直到后台任务完成（null = 用户选择后台运行）
+      const result = await waitForTask(task_id)
+      if (result === null) return   // 用户主动后台化，结果已由后端写入数据库
+
+      // OCR 自动识别失败 → 回到 OCR 步让用户框选
+      if (result.status === 'ocr_failed') {
         setStep(STEPS.OCR)
         setError('未能自动识别速度区域，请在下方图像上手动框选速度数字所在位置后重新检测。')
         return
       }
 
-      onResults(data.results)
+      onResults(result.results)
       onClose()
     } catch (e) {
       setError(`推理失败：${e.message}`)
@@ -152,13 +204,17 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
             <div className={s.regionSection}>
               <div className={s.regionLabel}>
                 速度区域
-                <span className={s.regionHint}>
-                  {region ? '✓ 已标注' : '可选 — 留空则自动识别'}
-                </span>
-                {region && (
-                  <button className={s.clearRegion} onClick={() => setRegion(null)}>
-                    清除
-                  </button>
+                {region ? (
+                  <span className={s.regionChip}>
+                    ✓ 已标注
+                    <button
+                      className={s.clearTag}
+                      onClick={() => setRegion(null)}
+                      title="清除标注区域"
+                    >×</button>
+                  </span>
+                ) : (
+                  <span className={s.regionHint}>可选 — 留空则自动识别</span>
                 )}
               </div>
 
@@ -286,7 +342,7 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
         {step === STEPS.PROCESSING && (
           <div className={s.processing}>
             <div className={s.spinner} />
-            <p>正在处理视频，请稍候…</p>
+            <p>{pollLabel || '提交任务中…'}</p>
             <small>
               {mode === 'gps'
                 ? 'GPS 模式正在根据轨迹按距离抽帧'
@@ -294,6 +350,14 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
                 ? '估算模式已启用跳帧优化，速度较快'
                 : 'OCR 模式正在识别速度字幕并按距离抽帧'}
             </small>
+            <button
+              className={s.bgBtn}
+              onClick={() => { cancelledRef.current = true; onClose() }}
+              title="关闭此窗口，任务继续在后台运行，结果将自动写入数据库"
+            >
+              后台运行
+            </button>
+            <div className={s.bgBtnNote}>关闭后结果将自动保存至数据库</div>
           </div>
         )}
       </div>

@@ -105,6 +105,15 @@ async def lifespan(app: FastAPI):
     preload_model()
     logger.info("✅ ls-det 模型已就绪")
 
+    if os.getenv("PRELOAD_OCR", "true").lower() == "true":
+        logger.info("⚡ 预加载 OCR 引擎（PaddleOCR 首次加载约需数分钟）...")
+        try:
+            from app.services.video_service import _get_ocr_engine
+            _get_ocr_engine()
+            logger.info("✅ OCR 引擎已就绪")
+        except Exception as e:
+            logger.warning(f"⚠️ OCR 引擎预加载失败（不影响 GPS/Timed 模式）: {e}")
+
     yield
 
     # ── 关闭阶段：优雅释放线程池 ────────────────────────────────────
