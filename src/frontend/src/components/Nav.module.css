@@ -55,3 +55,22 @@
   background: var(--border);
   margin: 0 8px;
 }
+
+.taskBtn {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); border-radius: 6px;
+  width: 32px; height: 32px;
+  transition: color 0.15s, background 0.15s;
+}
+.taskBtn:hover { color: var(--dark); background: var(--ash); }
+
+.badge {
+  position: absolute; top: 2px; right: 2px;
+  min-width: 14px; height: 14px;
+  background: var(--blue); color: #fff;
+  border-radius: 7px; font-size: 9px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px; line-height: 1;
+}

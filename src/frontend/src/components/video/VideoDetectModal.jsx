@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import s from './VideoDetectModal.module.css'
 import RegionCanvas from './RegionCanvas'
 import { getFirstFrame, detectVideo, pollVideoStatus } from '../../api/client'
+import { useTaskCenter } from '../../context/TaskContext'
 
 const STEPS = {
   SELECT:     'select',
@@ -20,6 +21,7 @@ const TITLES = {
 }
 
 export default function VideoDetectModal({ file, onClose, onResults }) {
+  const { addTask } = useTaskCenter()
   const [step,         setStep]         = useState(STEPS.SELECT)
   const [mode,         setMode]         = useState('gps')  // 默认 GPS 模式
   const [intervalM,    setIntervalM]    = useState(5)
@@ -113,6 +115,7 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
         gpsTrack,
       })
 
+      addTask(task_id, file.name, mode)
       setPollLabel('任务排队中…')
 
       // 轮询直到后台任务完成（null = 用户选择后台运行）

@@ -10,8 +10,10 @@ import MyRecordsPanel from './panels/MyRecordsPanel'
 import LoginPanel from './panels/LoginPanel'
 import AboutPanel from './panels/AboutPanel'
 import DashboardPanel from './panels/DashboardPanel'
+import TaskCenterDrawer from './components/TaskCenterDrawer'
 import { ToastProvider } from './context/ToastContext'
 import { NetworkProvider } from './context/NetworkContext'
+import { TaskProvider } from './context/TaskContext'
 
 const FULLSCREEN_TABS = ['map', 'dashboard'];
 
@@ -19,6 +21,7 @@ export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'))
   const [tab, setTab] = useState('image')
   const [prevTab, setPrevTab] = useState('image')
+  const [taskDrawerOpen, setTaskDrawerOpen] = useState(false)
 
   const handleLogout = () => {
     localStorage.removeItem('token')
@@ -44,7 +47,13 @@ export default function App() {
   return (
     <ToastProvider>
       <NetworkProvider>
-      <Nav onBackToDetect={() => handleTabChange('image')} onLogout={handleLogout} onTabChange={handleTabChange} />
+      <TaskProvider>
+      <Nav
+        onBackToDetect={() => handleTabChange('image')}
+        onLogout={handleLogout}
+        onTabChange={handleTabChange}
+        onTaskCenterClick={() => setTaskDrawerOpen(true)}
+      />
 
       {/* 只有在检测页面（image, video, records）才显示 Hero */}
       {showHero && (
@@ -77,6 +86,13 @@ export default function App() {
           © 2026 LightScan Team · 第19届中国大学生计算机设计大赛
         </footer>
       )}
+
+      <TaskCenterDrawer
+        open={taskDrawerOpen}
+        onClose={() => setTaskDrawerOpen(false)}
+        onViewRecords={() => handleTabChange('records')}
+      />
+      </TaskProvider>
       </NetworkProvider>
     </ToastProvider>
   )
