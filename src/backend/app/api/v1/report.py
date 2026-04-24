@@ -32,6 +32,7 @@ class WeeklyReportResponse(BaseModel):
     generated_at: str
     week_range: str
     operator: str
+    top_locations: list  # 置信度最高的前 5 处病害坐标，用于 PDF 报告
 
 
 @router.post("/weekly", response_model=WeeklyReportResponse)
@@ -135,6 +136,23 @@ def generate_weekly_report(
     except (KeyError, IndexError):
         raise HTTPException(status_code=502, detail="DeepSeek 返回格式异常")
 
+    # 置信度最高的前 5 处病害（优先取坑槽 D40），用于 PDF 中的重点位置表
+    sorted_records = sorted(
+        [r for r in records if r.lat and r.lng],
+        key=lambda r: (r.label == "D40", r.confidence or 0),
+        reverse=True,
+    )
+    top_locations = [
+        {
+            "label_cn": r.label_cn or SEVERITY.get(r.label or "", (r.label, "—"))[0] or "未知",
+            "lat": round(r.lat, 5),
+            "lng": round(r.lng, 5),
+            "confidence": round(r.confidence, 2) if r.confidence else None,
+            "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M") if r.timestamp else None,
+        }
+        for r in sorted_records[:5]
+    ]
+
     return WeeklyReportResponse(
         report_text=report_text,
         stats={
@@ -146,4 +164,5 @@ def generate_weekly_report(
         generated_at=now.strftime("%Y-%m-%d %H:%M"),
         week_range=f"{week_start.strftime('%Y-%m-%d')} ~ {now.strftime('%Y-%m-%d')}",
         operator=current_user.username,
+        top_locations=top_locations,
     )

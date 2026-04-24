@@ -1,8 +1,15 @@
 import io
+import os
 import random
 
 from PIL import Image
 from PIL.ExifTags import GPSTAGS, TAGS
+
+# 无 EXIF 时的模拟中心点（通过 .env 配置，默认武汉光谷）
+_FALLBACK_LAT = float(os.getenv("GPS_FALLBACK_LAT", "30.474"))
+_FALLBACK_LNG = float(os.getenv("GPS_FALLBACK_LNG", "114.414"))
+# 随机散布半径：±约 5 km，让演示数据在地图上自然分布
+_SPREAD = 0.045
 
 
 def _get_decimal_from_dms(dms, ref):
@@ -40,7 +47,7 @@ def extract_gps_from_image(img_bytes: bytes) -> tuple[float, float]:
     except Exception:
         pass
 
-    # 模拟坐标（武汉光谷区域）
-    mock_lat = round(random.uniform(30.40, 30.55), 6)
-    mock_lng = round(random.uniform(114.35, 114.45), 6)
+    # 无 EXIF GPS：在配置中心点附近随机散布，供地图演示
+    mock_lat = round(_FALLBACK_LAT + random.uniform(-_SPREAD, _SPREAD), 6)
+    mock_lng = round(_FALLBACK_LNG + random.uniform(-_SPREAD, _SPREAD), 6)
     return mock_lat, mock_lng
