@@ -1,8 +1,14 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import s from './UploadArea.module.css'
-export default function UploadArea({ accept, multiple, onFiles, title, hint }) {
+
+const UploadArea = forwardRef(function UploadArea({ accept, multiple, onFiles, title, hint }, ref) {
   const inputRef = useRef(null)
   const [over, setOver] = useState(false)
+
+  useImperativeHandle(ref, () => ({
+    open: () => inputRef.current?.click()
+  }))
+
   function handleDrop(e) {
     e.preventDefault(); setOver(false)
     const files = [...e.dataTransfer.files]
@@ -29,4 +35,6 @@ export default function UploadArea({ accept, multiple, onFiles, title, hint }) {
       <input ref={inputRef} type="file" accept={accept} multiple={multiple} style={{ display: 'none' }} onChange={handleChange} />
     </div>
   )
-}
+})
+
+export default UploadArea

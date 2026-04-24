@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import s from './ImagePanel.module.css'
 import UploadArea from '../components/UploadArea'
 import ProgressBar from '../components/ProgressBar'
@@ -17,6 +17,18 @@ export default function ImagePanel() {
   const [progress, setProgress] = useState({ visible: false, text: '', pct: 0 })
   const toast = useToast()
   const { isOnline, refreshCount } = useNetwork()
+  const uploadRef = useRef(null)
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault()
+        uploadRef.current?.open()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   async function handleFiles(files) {
     const images = files.filter(f => ALLOWED.includes(f.type))
@@ -136,10 +148,11 @@ export default function ImagePanel() {
       )}
 
       <UploadArea
+        ref={uploadRef}
         accept="image/*"
         multiple
         title="拖拽图片到此处"
-        hint="支持 JPG、PNG、WEBP、BMP，单次最多 20 张"
+        hint="支持 JPG、PNG、WEBP、BMP，单次最多 20 张 · Ctrl+Enter 快速选择"
         onFiles={handleFiles}
       />
       <ProgressBar visible={progress.visible} text={progress.text} pct={progress.pct} />

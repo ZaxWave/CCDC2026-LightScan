@@ -5,6 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import ClusterLayer     from '../components/map/ClusterLayer';
 import HeatmapControls  from '../components/map/HeatmapControls';
 import TimelineModal    from '../components/map/TimelineModal';
+import HealthLayer, { computeGrid } from '../components/map/HealthLayer';
 import { dispatchOrder } from '../api/client';
 
 const AMAP_KEY           = import.meta.env.VITE_AMAP_KEY;
@@ -31,11 +32,13 @@ export default function MapPanel({ onBackToDetect }) {
   const mapRef    = useRef(null);
   const mapObjRef = useRef(null);
   const [mapInstance,  setMapInstance]  = useState(null);
+  const [amapLib,      setAmapLib]      = useState(null);
   const [records,      setRecords]      = useState([]);
   const [stats,        setStats]        = useState(null);
   const [loading,      setLoading]      = useState(true);
   const [selectedType, setSelectedType] = useState(null);
   const [heatMode,     setHeatMode]     = useState(false);
+  const [healthMode,   setHealthMode]   = useState(false);
   const [timelineId,   setTimelineId]   = useState(null);
   const [sliderVal,    setSliderVal]    = useState(100);
   const [refreshKey,   setRefreshKey]   = useState(0);
@@ -55,6 +58,7 @@ export default function MapPanel({ onBackToDetect }) {
       });
       mapObjRef.current = map;
       setMapInstance(map);
+      setAmapLib(AMap);
     }).catch(e => console.error('高德地图加载失败:', e));
 
     return () => {
@@ -218,6 +222,44 @@ export default function MapPanel({ onBackToDetect }) {
     ? '全部数据'
     : new Date(cutoffTs).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
 
+  // ── 路段健康评分网格 ─────────────────────────────────────────────────────
+  const healthGrid = useMemo(() =>
+    healthMode ? computeGrid(filteredRecords) : []
+  , [filteredRecords, healthMode]);
+
+  // ── 键盘快捷键 ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const map = mapObjRef.current;
+      switch (e.key) {
+        case 'ArrowUp':    e.preventDefault(); map?.panBy(0,  120); break;
+        case 'ArrowDown':  e.preventDefault(); map?.panBy(0, -120); break;
+        case 'ArrowLeft':  e.preventDefault(); map?.panBy( 120, 0); break;
+        case 'ArrowRight': e.preventDefault(); map?.panBy(-120, 0); break;
+        case '+': case '=': map?.zoomIn();  break;
+        case '-':           map?.zoomOut(); break;
+        case 'h': case 'H':
+          setHealthMode(false);
+          setHeatMode(v => !v);
+          break;
+        case 'g': case 'G':
+          setHeatMode(false);
+          setHealthMode(v => !v);
+          break;
+        case 'r': case 'R':
+          setRefreshKey(k => k + 1);
+          break;
+        case 'Escape':
+          if (timelineId != null) setTimelineId(null);
+          break;
+        default: break;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [timelineId]);
+
   return (
     <div className={s.container} style={{ position: 'relative', width: '100%', height: 'calc(100vh - 60px)', overflow: 'hidden' }}>
 
@@ -254,7 +296,7 @@ export default function MapPanel({ onBackToDetect }) {
         mapInstance={mapInstance}
         records={filteredRecords}
         selectedType={selectedType}
-        visible={!heatMode}
+        visible={!heatMode && !healthMode}
         onShowTimeline={setTimelineId}
       />
 
@@ -263,6 +305,14 @@ export default function MapPanel({ onBackToDetect }) {
         mapInstance={mapInstance}
         records={filteredRecords}
         visible={heatMode}
+      />
+
+      {/* ── 路段健康评分图层 ── */}
+      <HealthLayer
+        mapInstance={mapInstance}
+        amap={amapLib}
+        records={filteredRecords}
+        visible={healthMode}
       />
 
       {/* ── 左侧可收起仪表盘 ── */}
@@ -314,59 +364,102 @@ export default function MapPanel({ onBackToDetect }) {
 
             <div style={{ display: 'flex', gap: '6px' }}>
               {[
-                { label: '散点模式', val: false },
-                { label: '热力图',  val: true  },
-              ].map(({ label, val }) => (
-                <button
-                  key={label}
-                  onClick={() => setHeatMode(val)}
-                  style={{
-                    flex: 1, height: '28px',
-                    background: heatMode === val
-                      ? (val ? 'rgba(239,68,68,0.15)' : 'rgba(62,106,225,0.15)')
-                      : 'rgba(255,255,255,0.04)',
-                    border: heatMode === val
-                      ? `1px solid ${val ? 'rgba(239,68,68,0.5)' : '#3E6AE1'}`
-                      : '1px solid rgba(255,255,255,0.1)',
-                    color: heatMode === val
-                      ? (val ? '#f87171' : '#93b4f7')
-                      : 'rgba(255,255,255,0.35)',
-                    fontSize: '11px', fontWeight: heatMode === val ? '600' : '400',
-                    cursor: 'pointer', letterSpacing: '0.02em', transition: 'all 0.2s',
-                  }}
-                >
-                  {label}
+                { label: '散点', key: 'scatter', accent: '#3E6AE1', active: !heatMode && !healthMode,
+                  onClick: () => { setHeatMode(false); setHealthMode(false); } },
+                { label: '热力图', key: 'heat', accent: '#ef4444', active: heatMode,
+                  onClick: () => { setHeatMode(true); setHealthMode(false); } },
+                { label: '健康图', key: 'health', accent: '#22c55e', active: healthMode,
+                  onClick: () => { setHeatMode(false); setHealthMode(true); } },
+              ].map(m => (
+                <button key={m.key} onClick={m.onClick} style={{
+                  flex: 1, height: '28px',
+                  background: m.active ? `${m.accent}22` : 'rgba(255,255,255,0.04)',
+                  border: m.active ? `1px solid ${m.accent}88` : '1px solid rgba(255,255,255,0.1)',
+                  color: m.active ? m.accent : 'rgba(255,255,255,0.35)',
+                  fontSize: '11px', fontWeight: m.active ? '600' : '400',
+                  cursor: 'pointer', letterSpacing: '0.02em', transition: 'all 0.2s',
+                }}>
+                  {m.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 中间：饼图 */}
-          <div style={{ padding: '16px 20px', flex: 1, borderBottom: '1px solid rgba(255,255,255,0.06)', minHeight: '220px', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <span style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>
-                分布占比
-              </span>
-              {selectedType && (
-                <span
-                  onClick={() => setSelectedType(null)}
-                  style={{ fontSize: '11px', color: '#93b4f7', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                >
-                  {selectedType} ×
-                </span>
-              )}
-            </div>
-            <ReactECharts
-              option={pieOption}
-              style={{ flex: 1, width: '100%' }}
-              onEvents={{
-                click: (params) => {
-                  if (params.componentType === 'series') {
-                    setSelectedType(prev => prev === params.name ? null : params.name);
-                  }
-                },
-              }}
-            />
+          {/* 中间：饼图 / 健康排行（互斥） */}
+          <div style={{ flex: 1, borderBottom: healthMode ? 'none' : '1px solid rgba(255,255,255,0.06)', minHeight: '220px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {!healthMode ? (
+              /* 饼图 */
+              <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>
+                    分布占比
+                  </span>
+                  {selectedType && (
+                    <span onClick={() => setSelectedType(null)} style={{ fontSize: '11px', color: '#93b4f7', cursor: 'pointer' }}>
+                      {selectedType} ×
+                    </span>
+                  )}
+                </div>
+                <ReactECharts
+                  option={pieOption}
+                  style={{ flex: 1, width: '100%' }}
+                  onEvents={{ click: (p) => { if (p.componentType === 'series') setSelectedType(prev => prev === p.name ? null : p.name) } }}
+                />
+              </div>
+            ) : (
+              /* 健康排行榜 */
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 20px 10px', flexShrink: 0 }}>
+                  <span style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>
+                    路段健康排行
+                  </span>
+                </div>
+                {/* legend */}
+                <div style={{ padding: '0 20px 10px', display: 'flex', gap: 10, flexShrink: 0 }}>
+                  {[['#22c55e','≥80'], ['#eab308','60–79'], ['#f97316','40–59'], ['#ef4444','<40']].map(([c, l]) => (
+                    <div key={l} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: 2, background: c, flexShrink: 0 }} />
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.35)' }}>{l}</span>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px' }}>
+                  {healthGrid.length === 0 ? (
+                    <div style={{ padding: '20px 0', textAlign: 'center', color: 'rgba(255,255,255,0.2)', fontSize: 12 }}>暂无含坐标的记录</div>
+                  ) : healthGrid.slice(0, 15).map((cell, i) => (
+                    <div
+                      key={cell.key}
+                      onClick={() => mapInstance?.setCenter([cell.gLng, cell.gLat])}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '7px 8px', marginBottom: 3, borderRadius: 3,
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.05)',
+                        cursor: 'pointer', transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                    >
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', width: 16, flexShrink: 0, textAlign: 'right' }}>#{i+1}</span>
+                      <div style={{
+                        width: 36, height: 24, borderRadius: 3, flexShrink: 0,
+                        background: cell.color + '22', border: `1px solid ${cell.color}55`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: cell.color, fontVariantNumeric: 'tabular-nums' }}>{cell.score}</span>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', fontVariantNumeric: 'tabular-nums' }}>
+                          {cell.gLat.toFixed(3)}°N, {cell.gLng.toFixed(3)}°E
+                        </div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }}>{cell.count} 处病害</div>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.2)', flexShrink: 0 }}>→</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 底部：折线图 */}
@@ -408,6 +501,18 @@ export default function MapPanel({ onBackToDetect }) {
                 该时段共检出 <b style={{ color: '#93b4f7' }}>{filteredRecords.length}</b> 处病害
               </div>
             )}
+          </div>
+
+          {/* 快捷键提示 */}
+          <div style={{ padding: '8px 20px', borderTop: '1px solid rgba(255,255,255,0.04)', flexShrink: 0 }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 12px' }}>
+              {[['←↑→↓','平移'], ['H','热力图'], ['G','健康图'], ['R','刷新'], ['+/-','缩放'], ['Esc','关闭']].map(([k, v]) => (
+                <span key={k} style={{ fontSize: 9, color: 'rgba(255,255,255,0.18)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <kbd style={{ padding: '1px 4px', background: 'rgba(255,255,255,0.07)', borderRadius: 2, fontFamily: 'monospace', fontSize: 9, color: 'rgba(255,255,255,0.35)' }}>{k}</kbd>
+                  {v}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
       </div>
