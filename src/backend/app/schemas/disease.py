@@ -23,6 +23,7 @@ class DiseaseRecordOut(BaseModel):
     repaired_image_b64: Optional[str] = None
     repaired_at: Optional[datetime] = None
     cluster_id: Optional[str] = None
+    dispatch_info: Optional[Any] = None
 
     model_config = {"from_attributes": True}
 

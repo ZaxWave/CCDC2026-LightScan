@@ -23,6 +23,7 @@ from app.api.v1.auth import router as auth_router
 from app.api.v1.users import router as users_router
 from app.api.v1.report import router as report_router
 from app.api.v1.ai_report import router as ai_report_router
+from app.api.v1.disease import router as disease_router
 
 from sqlalchemy import inspect, text
 from .db.database import engine
@@ -56,6 +57,8 @@ def _migrate_disease_records():
                 conn.execute(text("ALTER TABLE disease_records ADD COLUMN repaired_image_b64 TEXT"))
             if "repaired_at" not in cols:
                 conn.execute(text("ALTER TABLE disease_records ADD COLUMN repaired_at TIMESTAMP"))
+            if "dispatch_info" not in cols:
+                conn.execute(text("ALTER TABLE disease_records ADD COLUMN dispatch_info JSONB"))
             conn.commit()
 
         # users 表补充设备字段
@@ -157,6 +160,7 @@ app.include_router(detect_router)
 app.include_router(detect_video_router)
 app.include_router(gis_router)
 app.include_router(ai_report_router)
+app.include_router(disease_router)
 
 
 @app.get("/health")

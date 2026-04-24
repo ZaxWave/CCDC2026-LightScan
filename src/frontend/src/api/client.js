@@ -118,3 +118,7 @@ export function getSourceStats() {
 export function getClusterTimeline(recordId) {
   return request(`/api/v1/gis/clusters/${recordId}/timeline`, null, 'GET');
 }
+
+export function dispatchOrder(recordId) {
+  return request(`/api/v1/disease/dispatch/${recordId}`, {}, 'POST');
+}

@@ -126,6 +126,35 @@ export function buildInfoWindowHtml(item) {
           </svg>
           演变时间轴
         </div>
+
+        <!-- AI 派发工单按钮 -->
+        ${item.dispatch_info ? `
+        <div style="
+          margin-top:4px;padding:7px 0;border-radius:6px;
+          background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.35);
+          display:flex;align-items:center;justify-content:center;gap:6px;
+          font-size:12px;font-weight:600;color:#22c55e;
+        ">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+          已派发 · ${item.dispatch_info.urgency || ''}
+        </div>` : `
+        <button
+          id="ls-dispatch-btn-${item.id}"
+          onclick="window.__lsDispatchOrder(${item.id})"
+          style="
+            margin-top:4px;width:100%;padding:7px 0;border-radius:6px;
+            background:rgba(62,106,225,0.12);border:1px solid rgba(62,106,225,0.4);
+            display:flex;align-items:center;justify-content:center;gap:6px;
+            font-size:12px;font-weight:600;color:#93b4f7;cursor:pointer;
+            transition:background 0.15s;
+          "
+          onmouseover="this.style.background='rgba(62,106,225,0.22)'"
+          onmouseout="this.style.background='rgba(62,106,225,0.12)'"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" style="flex-shrink:0"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+          AI 派发工单
+        </button>`}
+      </div><!-- /详情区 -->
       </div><!-- /详情区 -->
 
       <!-- 关闭按钮 -->

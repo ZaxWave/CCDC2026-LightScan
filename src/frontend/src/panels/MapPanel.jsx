@@ -5,6 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import ClusterLayer     from '../components/map/ClusterLayer';
 import HeatmapControls  from '../components/map/HeatmapControls';
 import TimelineModal    from '../components/map/TimelineModal';
+import { dispatchOrder } from '../api/client';
 
 const AMAP_KEY           = import.meta.env.VITE_AMAP_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
@@ -37,6 +38,7 @@ export default function MapPanel({ onBackToDetect }) {
   const [heatMode,     setHeatMode]     = useState(false);
   const [timelineId,   setTimelineId]   = useState(null);
   const [sliderVal,    setSliderVal]    = useState(100);
+  const [refreshKey,   setRefreshKey]   = useState(0);
 
   // ── 初始化地图 ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -70,6 +72,33 @@ export default function MapPanel({ onBackToDetect }) {
       .then(res => res.json())
       .then(data => { setRecords(data || []); setLoading(false); })
       .catch(() => setLoading(false));
+  }, [refreshKey]);
+
+  // ── 注册地图标记派发回调 ────────────────────────────────────────────────
+  useEffect(() => {
+    window.__lsDispatchOrder = async (id) => {
+      const btn = document.getElementById(`ls-dispatch-btn-${id}`)
+      if (btn) { btn.disabled = true; btn.textContent = '派发中…'; btn.style.opacity = '0.6'; }
+      try {
+        await dispatchOrder(id)
+        if (btn) {
+          btn.textContent = '✓ 派发成功'
+          btn.style.color = '#22c55e'
+          btn.style.background = 'rgba(34,197,94,0.12)'
+          btn.style.borderColor = 'rgba(34,197,94,0.4)'
+          btn.style.opacity = '1'
+        }
+        setRefreshKey(k => k + 1)
+      } catch (e) {
+        if (btn) {
+          btn.textContent = e.message?.includes('401') ? '请先登录' : '派发失败'
+          btn.style.color = '#ef4444'
+          btn.disabled = false
+          btn.style.opacity = '1'
+        }
+      }
+    }
+    return () => { delete window.__lsDispatchOrder }
   }, []);
 
   // ── 获取近 7 日统计 ─────────────────────────────────────────────────────

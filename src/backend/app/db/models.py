@@ -69,6 +69,7 @@ class DiseaseRecord(Base):
     worker_name        = Column(String, nullable=True)
     repaired_image_b64 = Column(Text, nullable=True)
     repaired_at        = Column(DateTime, nullable=True)
+    dispatch_info      = Column(JSONB, nullable=True)  # AI 生成的工单内容
 
     creator = relationship("User",           back_populates="records")
     cluster = relationship("DiseaseCluster", back_populates="records")
