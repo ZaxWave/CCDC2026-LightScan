@@ -128,6 +128,28 @@ export default function ImagePanel() {
     refreshCount()
   }
 
+  function exportReport() {
+    const rows = [['文件名', '病害类型', '置信度', '推理耗时(ms)']]
+    for (const item of items) {
+      if (item.detections.length === 0) {
+        rows.push([item.filename, '正常', '', item.inference_ms ?? ''])
+      } else {
+        for (const d of item.detections) {
+          rows.push([item.filename, `${d.label_cn}(${d.label})`, d.conf, item.inference_ms ?? ''])
+        }
+      }
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url  = URL.createObjectURL(blob)
+    const a    = Object.assign(document.createElement('a'), {
+      href: url,
+      download: `lightscan_report_${new Date().toISOString().slice(0,10)}.csv`,
+    })
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className={s.panel}>
       <div className={s.sectionTitle}>上传文件</div>
@@ -157,6 +179,27 @@ export default function ImagePanel() {
       />
       <ProgressBar visible={progress.visible} text={progress.text} pct={progress.pct} />
       <StatsRow stats={stats} />
+      {items.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' }}>
+          <button
+            onClick={exportReport}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '6px 14px', fontSize: 12, fontWeight: 600,
+              background: 'var(--ash)', border: '1px solid var(--border)',
+              color: 'var(--muted)', cursor: 'pointer', letterSpacing: '0.04em',
+              transition: 'border-color 0.15s, color 0.15s',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--blue)'; e.currentTarget.style.color = 'var(--blue)' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            导出 CSV 报告
+          </button>
+        </div>
+      )}
       <div className={s.sectionTitle}>检测结果</div>
       <ResultsGrid items={items} />
     </div>

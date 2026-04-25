@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react'
 import { pollVideoStatus } from '../api/client'
+import { notifyDone } from '../utils/notify'
 
 const TaskCtx = createContext(null)
 const STORAGE_KEY = 'ls_video_tasks'
@@ -44,6 +45,7 @@ export function TaskProvider({ children }) {
           const data = await pollVideoStatus(task.id)
           if (data.status === 'done') {
             update(task.id, { status: 'done', completedAt: Date.now() })
+            notifyDone('后台视频任务完成', `${task.filename} 检测已完成，结果已写入数据库`)
           } else if (data.status === 'failed') {
             update(task.id, { status: 'failed', error: data.error, completedAt: Date.now() })
           } else {

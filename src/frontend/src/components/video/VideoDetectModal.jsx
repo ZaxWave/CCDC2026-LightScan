@@ -3,6 +3,7 @@ import s from './VideoDetectModal.module.css'
 import RegionCanvas from './RegionCanvas'
 import { getFirstFrame, detectVideo, pollVideoStatus } from '../../api/client'
 import { useTaskCenter } from '../../context/TaskContext'
+import { notifyDone } from '../../utils/notify'
 
 const STEPS = {
   SELECT:     'select',
@@ -129,6 +130,7 @@ export default function VideoDetectModal({ file, onClose, onResults }) {
         return
       }
 
+      notifyDone('视频检测完成', `${file.name}：检出 ${result.results.length} 帧病害图像`)
       onResults(result.results)
       onClose()
     } catch (e) {
