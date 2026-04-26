@@ -314,7 +314,7 @@
   \multirow{4}{*}{Web 管理端}
     & 图片检测 & 批量上传图片（$\leq$20张），展示标注结果，一键入库 & R2 \\
     & 视频检测 & 上传行车记录仪视频，OCR/估算模式按里程抽帧检测   & R1、R2 \\
-    & GIS 地图 & 散点/热力图/时间轴三层渲染，病害点工单原地流转   & R3、R4 \\
+    & GIS 地图 & 散点/热力图/健康评分/时间轴四层渲染，工单原地流转，最差路段排行定位   & R3、R4 \\
     & 数据大屏 & 3D 态势感知，展示病害分布、来源与趋势统计        & R3 \\
   \midrule
   \multirow{4}{*}{云端服务层}
@@ -500,11 +500,12 @@
   \paragraph{图片检测面板}
   支持拖拽或点击上传最多 20 张路面图片，实时进度条反映当前推理阶段。
   推理完成后以卡片网格展示带标注框的结果图，并在顶部汇总四项统计指标。
+  结果支持\textbf{一键导出 CSV 报告}，含 BOM 字符集适配，可直接用 Excel 打开进行二次分析。
   离线状态下系统自动将任务缓存至 IndexedDB，恢复联网后提示同步。
 
   \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\linewidth]{fig_image_detect.png}
+    \includegraphics[width=0.7\linewidth]{fig_image_detect.png}
     \caption{图片检测面板——推理标注框结果展示}
     \label{fig:image_detect}
   \end{figure}
@@ -534,6 +535,9 @@
     \label{fig:map}
   \end{figure}
 
+  \paragraph{路段健康评分图层}
+  在散点与热力图基础上，GIS 地图新增 \textbf{HealthLayer 网格化评分图层}。算法将地图划分为等尺寸网格单元，依据单元内覆盖的病害数量、病害严重等级（\texttt{severity}）与修复状态系数加权计算 0--100 分的路段健康值，以绿/黄/橙/红四色梯度渲染，直观呈现路网健康分布。侧边栏联动展示\textbf{最差路段排行榜}，点击条目自动重定位地图视野，为养护资源的优先级决策提供量化支撑，对应需求 R3（时空演变追踪）。
+
   \paragraph{3D 态势感知大屏}
   全屏沉浸式看板，采用科技风 HUD 布局，集成：
   \textbf{高德 3D 地球}（病害热力叠加）、
@@ -549,7 +553,10 @@
     \label{fig:dashboard}
   \end{figure}
 
-  \subsubsection{3.1.3 移动端：差异化交互与角色驱动}
+  \paragraph{修复验收对比面板}
+  针对状态为"已修复"且含回传照片的工单，系统提供 \textbf{Before-After Slider 卷帘式对比视图}：拖动中央滑块可实时对比检测原图与修复后照片，并联动展示置信度、负责人及工单紧急程度元数据，将验收判断从主观描述升级为可视化比对。该功能接入"我的记录"列表，仅对满足条件的任务开放"对比"入口，直接闭合 R4 全生命周期的最后一环。
+
+  \subsubsection{移动端：差异化交互与角色驱动}
 
   移动端基于 Taro 4 构建，同一代码库编译输出微信小程序与 H5 两个目标平台。
   首页以\textbf{角色选择卡片}分流，\textbf{市民用户}直接进入随手拍上报页，
@@ -560,6 +567,8 @@
 
   \textbf{巡检员工作台}以卡片列表展示分配至本人的工单，支持按状态筛选
   （待处理 / 处理中 / 已完成），点开工单可上传修复后照片并更新状态。
+
+  \textbf{深色主题与真机适配}：移动端全站采用 \texttt{\#111111} 深色背景，与 Web 管理端视觉语言保持统一，专业感一致。针对真机部署，上传前自动压缩图片（quality: 30），网络超时延长至 120\,s，并在页面加载时预申请相机与录音权限，配合状态锁防止录像重入，保障\textbf{巡检录像}功能在复杂网络环境下的稳定性。
 
   \begin{figure}[H]
     \centering
@@ -580,7 +589,7 @@
     \label{fig:mobile}
   \end{figure}
 
-  \subsubsection{3.1.4 典型业务流程设计}
+  \subsubsection{典型业务流程设计}
 
   系统支持\textbf{专业巡检}与\textbf{市民众包}两条并行的病害采集通道，
   汇聚至统一的时空聚类引擎后进入工单管理闭环，如图~\ref{fig:flow} 所示。
@@ -1268,7 +1277,8 @@ npm run build:weapp   # 用微信开发者工具导入 dist/weapp/
 \begin{enumerate}[label=\arabic*., nosep]
     \item \textbf{派单}：管理员在 GIS 大屏点击病害点，指派任务至对应巡检员。
     \item \textbf{修复}：巡检员通过移动端接收待办，完成修复后上传对比照片。
-    \item \textbf{归档}：系统核验修复影像，GIS 散点状态同步变更为“已修复”并进入时间轴归档。
+    \item \textbf{对比验收}：修复完成后，系统开放卷帘式 Before-After Slider 对比界面，管理员拖动滑块实时比对修复前后影像，确认质量后完成验收闭环。
+    \item \textbf{归档}：系统核验修复影像，GIS 散点状态同步变更为”已修复”并进入时间轴归档。
 \end{enumerate}
 
 \section{项目总结}
