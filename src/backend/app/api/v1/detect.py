@@ -61,7 +61,11 @@ async def detect(
         img_b64 = res.get("image_b64", "") or ""
         for det in res.get("detections", []):
             feature = det.get("feature")
-            cluster_id = assign_cluster(rec_lat, rec_lng, det.get("label_cn"), feature, db)
+            cluster_id = assign_cluster(
+                rec_lat, rec_lng, det.get("label_cn"), feature, db,
+                confidence=det.get("conf"),
+                bbox=det.get("bbox"),
+            )
             db_record = DiseaseRecord(
                 filename=upload.filename,
                 lat=rec_lat,

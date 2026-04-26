@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import DiseaseRecord
+from app.db.models import DiseaseRecord, DiseaseCluster, AuditLog
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1/disease", tags=["Disease Orders"])
@@ -114,6 +114,7 @@ def dispatch_order(
         raise HTTPException(status_code=502, detail=f"AI 生成失败: {e}")
 
     now_iso = datetime.now(tz=timezone.utc).isoformat()
+    prev_status = record.status
     record.dispatch_info = {
         **ai_data,
         "dispatched_at": now_iso,
@@ -122,6 +123,33 @@ def dispatch_order(
     }
     record.status = "processing"
     record.worker_name = current_user.username
+
+    # 审计日志
+    db.add(AuditLog(
+        entity_type="record",
+        entity_id=str(record.id),
+        from_status=prev_status,
+        to_status="processing",
+        operator_id=current_user.id,
+        note=f"AI 派单 by {current_user.username}",
+    ))
+    # 同步 cluster 状态
+    if record.cluster_id:
+        cluster = db.query(DiseaseCluster).filter(
+            DiseaseCluster.cluster_id == record.cluster_id
+        ).first()
+        if cluster and cluster.status != "processing":
+            db.add(AuditLog(
+                entity_type="cluster",
+                entity_id=cluster.cluster_id,
+                from_status=cluster.status,
+                to_status="processing",
+                operator_id=current_user.id,
+                note=f"AI 派单触发 by {current_user.username}",
+            ))
+            cluster.status = "processing"
+            cluster.worker_id = current_user.id
+
     db.commit()
     db.refresh(record)
 
@@ -198,9 +226,35 @@ def update_order_status(
     if not record:
         raise HTTPException(status_code=404, detail="工单不存在")
 
+    prev_status = record.status
     record.status = body.status
     record.worker_name = current_user.username
     if body.status == "repaired":
         record.repaired_at = datetime.now(tz=timezone.utc)
+
+    db.add(AuditLog(
+        entity_type="record",
+        entity_id=str(record.id),
+        from_status=prev_status,
+        to_status=body.status,
+        operator_id=current_user.id,
+        note=f"巡检员 {current_user.username} 更新",
+    ))
+    if record.cluster_id:
+        cluster = db.query(DiseaseCluster).filter(
+            DiseaseCluster.cluster_id == record.cluster_id
+        ).first()
+        if cluster and cluster.status != body.status:
+            db.add(AuditLog(
+                entity_type="cluster",
+                entity_id=cluster.cluster_id,
+                from_status=cluster.status,
+                to_status=body.status,
+                operator_id=current_user.id,
+            ))
+            cluster.status = body.status
+            if body.status == "repaired":
+                cluster.repaired_at = record.repaired_at
+
     db.commit()
     return {"ok": True, "status": body.status}

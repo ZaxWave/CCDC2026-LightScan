@@ -270,7 +270,7 @@ npm run build      # 生产构建 → 产物由 FastAPI 静态托管
 ### 4.5 移动端（微信小程序 / H5）
 
 ```bash
-cd src/mobile
+cd src/mobile   
 npm install
 
 # H5 开发预览（浏览器 F12 切手机模式）

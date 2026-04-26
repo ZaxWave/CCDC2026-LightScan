@@ -9,9 +9,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.database import get_db
-from app.db.models import DiseaseRecord, DiseaseCluster, User
+from app.db.models import DiseaseRecord, DiseaseCluster, User, AuditLog, DiseaseMedia
 from app.schemas.disease import DailyCount, DiseaseRecordOut, StatsOut
-from app.api.deps import get_current_user # 引入路由守卫
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1/gis", tags=["gis"])
 
@@ -68,6 +68,7 @@ async def update_record_status(
     if record.creator_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="无权修改他人的记录")
 
+    prev_status = record.status
     record.status = status
     if worker_name is not None:
         record.worker_name = worker_name
@@ -80,6 +81,22 @@ async def update_record_status(
             mime = repaired_image.content_type or "image/jpeg"
             repaired_b64 = f"data:{mime};base64," + base64.b64encode(img_bytes).decode()
             record.repaired_image_b64 = repaired_b64
+            # 大字段分离：同步写入 disease_media 表
+            db.add(DiseaseMedia(
+                cluster_id=record.cluster_id,
+                record_id=record.id,
+                media_type="repaired",
+                b64_data=repaired_b64,
+            ))
+
+    # 审计日志：记录 record 状态流转
+    db.add(AuditLog(
+        entity_type="record",
+        entity_id=str(record.id),
+        from_status=prev_status,
+        to_status=status,
+        operator_id=current_user.id,
+    ))
 
     # 同步更新 disease_clusters 主实体
     if record.cluster_id:
@@ -87,6 +104,7 @@ async def update_record_status(
             DiseaseCluster.cluster_id == record.cluster_id
         ).first()
         if cluster:
+            prev_cluster_status = cluster.status
             cluster.status = status
             if worker_name:
                 cluster.worker_id = current_user.id
@@ -94,6 +112,15 @@ async def update_record_status(
                 cluster.repaired_at = record.repaired_at
                 if repaired_b64:
                     cluster.repaired_image_b64 = repaired_b64
+            # 审计日志：记录 cluster 状态流转
+            if prev_cluster_status != status:
+                db.add(AuditLog(
+                    entity_type="cluster",
+                    entity_id=cluster.cluster_id,
+                    from_status=prev_cluster_status,
+                    to_status=status,
+                    operator_id=current_user.id,
+                ))
 
     db.commit()
     db.refresh(record)
@@ -130,6 +157,21 @@ def delete_record(
         raise HTTPException(status_code=403, detail="无权删除他人的记录")
 
     record.deleted_at = datetime.now(tz=timezone.utc)
+
+    # 若 cluster 下所有记录均已软删除，同步软删除 cluster，防止历史档案丢失
+    if record.cluster_id:
+        active_siblings = db.query(DiseaseRecord).filter(
+            DiseaseRecord.cluster_id == record.cluster_id,
+            DiseaseRecord.id != record.id,
+            DiseaseRecord.deleted_at.is_(None),
+        ).count()
+        if active_siblings == 0:
+            cluster = db.query(DiseaseCluster).filter(
+                DiseaseCluster.cluster_id == record.cluster_id
+            ).first()
+            if cluster and cluster.deleted_at is None:
+                cluster.deleted_at = record.deleted_at
+
     db.commit()
     return {"message": "已移入回收站"}
 
