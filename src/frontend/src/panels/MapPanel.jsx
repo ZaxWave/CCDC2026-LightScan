@@ -5,6 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import ClusterLayer     from '../components/map/ClusterLayer';
 import HeatmapControls  from '../components/map/HeatmapControls';
 import TimelineModal    from '../components/map/TimelineModal';
+import FusionModal     from '../components/map/FusionModal';
 import HealthLayer, { computeGrid } from '../components/map/HealthLayer';
 import { dispatchOrder } from '../api/client';
 
@@ -40,6 +41,7 @@ export default function MapPanel({ onBackToDetect }) {
   const [heatMode,     setHeatMode]     = useState(false);
   const [healthMode,   setHealthMode]   = useState(false);
   const [timelineId,   setTimelineId]   = useState(null);
+  const [fusionId,     setFusionId]     = useState(null);
   const [sliderVal,    setSliderVal]    = useState(100);
   const [refreshKey,   setRefreshKey]   = useState(0);
 
@@ -251,6 +253,7 @@ export default function MapPanel({ onBackToDetect }) {
           setRefreshKey(k => k + 1);
           break;
         case 'Escape':
+          if (fusionId   != null) { setFusionId(null);   break; }
           if (timelineId != null) setTimelineId(null);
           break;
         default: break;
@@ -298,6 +301,7 @@ export default function MapPanel({ onBackToDetect }) {
         selectedType={selectedType}
         visible={!heatMode && !healthMode}
         onShowTimeline={setTimelineId}
+        onShowFusion={setFusionId}
       />
 
       {/* ── 热力图层 + 参数控制面板 ── */}
@@ -524,6 +528,14 @@ export default function MapPanel({ onBackToDetect }) {
         <TimelineModal
           recordId={timelineId}
           onClose={() => setTimelineId(null)}
+        />
+      )}
+
+      {/* ── 多源融合全景弹窗 ── */}
+      {fusionId != null && (
+        <FusionModal
+          recordId={fusionId}
+          onClose={() => setFusionId(null)}
         />
       )}
     </div>

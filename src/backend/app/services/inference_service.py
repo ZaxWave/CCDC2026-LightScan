@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 from inference import LightScanInference
 from .geo_service import extract_gps_from_image
-from datetime import datetime
+from datetime import datetime, timezone
 
 # 串行化推理：防止多线程并发导致显存溢出
 _inference_lock = threading.Semaphore(1)
@@ -119,7 +119,7 @@ def _run_detect_impl(img_bytes: bytes, conf: float = 0.25) -> dict:
     engine = get_engine()
 
     lat, lng = extract_gps_from_image(img_bytes)
-    current_time = datetime.now().isoformat()
+    current_time = datetime.now(tz=timezone.utc).isoformat()
 
     # 图像解码为 numpy 数组，默认 BGR 通道顺序
     arr = np.frombuffer(img_bytes, dtype=np.uint8)

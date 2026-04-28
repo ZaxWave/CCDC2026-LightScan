@@ -110,7 +110,7 @@ async def ai_cluster_advice(
 
     timeline = [
         {
-            "timestamp": r.timestamp.isoformat(),
+            "timestamp": r.timestamp.replace(tzinfo=timezone.utc).isoformat(),
             "confidence": round(r.confidence, 4) if r.confidence else None,
             "status": r.status,
         }

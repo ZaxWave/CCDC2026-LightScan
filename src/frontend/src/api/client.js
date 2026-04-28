@@ -30,9 +30,12 @@ async function request(path, body, method = 'POST') {
   return res.json();
 }
 
-export function detectImages(files) {
+export function detectImages(files, sourceType, gps) {
   const form = new FormData()
   files.forEach(f => form.append('files', f))
+  if (sourceType) form.append('source_type', sourceType)
+  if (gps?.lat != null) form.append('lat', gps.lat)
+  if (gps?.lng != null) form.append('lng', gps.lng)
   return request('/api/v1/detect', form)
 }
 
@@ -117,6 +120,10 @@ export function getSourceStats() {
 
 export function getClusterTimeline(recordId) {
   return request(`/api/v1/gis/clusters/${recordId}/timeline`, null, 'GET');
+}
+
+export function getClusterFusion(recordId) {
+  return request(`/api/v1/gis/clusters/${recordId}/fusion`, null, 'GET');
 }
 
 export function dispatchOrder(recordId) {

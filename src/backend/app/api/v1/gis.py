@@ -389,7 +389,7 @@ def get_cluster_timeline(
 
         timeline.append({
             "id":            r.id,
-            "timestamp":     r.timestamp.isoformat(),
+            "timestamp":     r.timestamp.replace(tzinfo=timezone.utc).isoformat(),
             "confidence":    round(r.confidence, 4) if r.confidence is not None else None,
             "bbox_area":     bbox_area,
             "filename":      r.filename,
@@ -414,6 +414,131 @@ def get_cluster_timeline(
         "total":     len(timeline),
         "trend":     trend,
         "timeline":  timeline,
+    }
+
+
+@router.get("/clusters/{record_id}/fusion")
+def get_cluster_fusion(record_id: int, db: Session = Depends(get_db)):
+    """
+    多源融合全景分析。
+
+    返回同一聚类内所有检测记录的图像证据、来源构成和融合置信度。
+
+    融合置信度公式：P_fused = 1 − ∏(1 − Pᵢ)
+    含义：多个独立观测中至少一次正确识别的概率，等效于多低精度源代偿专业设备。
+    """
+    ref = db.query(DiseaseRecord).filter(
+        DiseaseRecord.id == record_id,
+        DiseaseRecord.deleted_at == None,
+    ).first()
+    if not ref:
+        raise HTTPException(status_code=404, detail="记录不存在")
+
+    if ref.cluster_id:
+        records = (
+            db.query(DiseaseRecord)
+            .filter(
+                DiseaseRecord.cluster_id == ref.cluster_id,
+                DiseaseRecord.deleted_at == None,
+            )
+            .order_by(DiseaseRecord.timestamp.asc())
+            .all()
+        )
+    else:
+        records = [ref]
+
+    # 质心均值
+    valid_lats = [r.lat for r in records if r.lat]
+    valid_lngs = [r.lng for r in records if r.lng]
+    center_lat = sum(valid_lats) / len(valid_lats) if valid_lats else (ref.lat or 0)
+    center_lng = sum(valid_lngs) / len(valid_lngs) if valid_lngs else (ref.lng or 0)
+
+    def _bearing(lat1, lng1, lat2, lng2):
+        """返回从 (lat1,lng1) 指向 (lat2,lng2) 的方位角（0°=北，顺时针）。"""
+        dL = math.radians(lng2 - lng1)
+        r1, r2 = math.radians(lat1), math.radians(lat2)
+        x = math.sin(dL) * math.cos(r2)
+        y = math.cos(r1) * math.sin(r2) - math.sin(r1) * math.cos(r2) * math.cos(dL)
+        return (math.degrees(math.atan2(x, y)) + 360) % 360
+
+    def _dist_m(la1, lo1, la2, lo2):
+        R = 6_371_000.0
+        p1, p2 = math.radians(la1), math.radians(la2)
+        dp = math.radians(la2 - la1)
+        dl = math.radians(lo2 - lo1)
+        a = math.sin(dp/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+        return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    # 按 source_type 分组
+    source_groups: dict = {}
+    for r in records:
+        src = r.source_type or "unknown"
+        source_groups.setdefault(src, []).append(r)
+
+    # 每条记录的证据对象（限制缩略图大小：已存 thumbnail_b64 直接用）
+    n = len(records)
+    evidence = []
+    for i, r in enumerate(records):
+        brg = _bearing(center_lat, center_lng, r.lat or center_lat, r.lng or center_lng) \
+              if (r.lat and r.lng and (abs(r.lat - center_lat) > 1e-7 or abs(r.lng - center_lng) > 1e-7)) \
+              else (i * 360 / max(n, 1))
+        evidence.append({
+            "id":            r.id,
+            "source_type":   r.source_type or "unknown",
+            "confidence":    round(r.confidence, 4) if r.confidence is not None else None,
+            "timestamp":     r.timestamp.replace(tzinfo=timezone.utc).isoformat() if r.timestamp else None,
+            "thumbnail_b64": r.thumbnail_b64,
+            "bearing_deg":   round(brg, 1),
+            "lat":           r.lat,
+            "lng":           r.lng,
+        })
+
+    # 融合置信度：P = 1 − ∏(1 − Pᵢ)
+    confs = [r.confidence for r in records if r.confidence is not None]
+    if confs:
+        p_complement = 1.0
+        for c in confs:
+            p_complement *= (1.0 - c)
+        p_fused = 1.0 - p_complement
+    else:
+        p_fused = 0.0
+    max_individual = max(confs) if confs else 0.0
+
+    # GPS 散布半径（质心到最远记录的距离）
+    scatter_m = 0.0
+    if len(valid_lats) > 1:
+        scatter_m = max(
+            _dist_m(center_lat, center_lng, la, lo)
+            for la, lo in zip(valid_lats, valid_lngs)
+        )
+
+    source_stats = {
+        src: {
+            "count":    len(rs),
+            "max_conf": round(max((r.confidence for r in rs if r.confidence is not None), default=0.0), 4),
+            "avg_conf": round(
+                sum(r.confidence for r in rs if r.confidence is not None) /
+                max(sum(1 for r in rs if r.confidence is not None), 1),
+                4,
+            ),
+        }
+        for src, rs in source_groups.items()
+    }
+
+    return {
+        "label_cn":             ref.label_cn,
+        "label":                ref.label,
+        "color_hex":            ref.color_hex,
+        "cluster_id":           ref.cluster_id,
+        "total":                n,
+        "evidence":             evidence,
+        "source_stats":         source_stats,
+        "fused_confidence":     round(p_fused, 4),
+        "max_individual_conf":  round(max_individual, 4),
+        "boost":                round(max(0.0, p_fused - max_individual), 4),
+        "scatter_radius_m":     round(scatter_m, 1),
+        "center_lat":           center_lat,
+        "center_lng":           center_lng,
     }
 
 

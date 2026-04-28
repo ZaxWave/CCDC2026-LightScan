@@ -202,7 +202,7 @@ def get_orders(
             "lng":              r.lng,
             "dispatched_at":    info.get("dispatched_at"),
             "dispatched_by":    info.get("dispatched_by"),
-            "timestamp":        r.timestamp.isoformat() if r.timestamp else None,
+            "timestamp":        r.timestamp.replace(tzinfo=timezone.utc).isoformat() if r.timestamp else None,
         })
     return result
 

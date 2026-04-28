@@ -1,8 +1,15 @@
 import { useState } from 'react'
 import s from './ResultCard.module.css'
 
+function fmtTime(iso) {
+  if (!iso) return null
+  try {
+    return new Date(iso).toLocaleString('zh-CN', { hour12: false })
+  } catch { return iso }
+}
+
 export default function ResultCard({ item }) {
-  const { filename, detections, image_b64, inference_ms } = item
+  const { filename, detections, image_b64, inference_ms, timestamp } = item
   const [isZoomed, setIsZoomed] = useState(false)
 
   return (
@@ -52,6 +59,7 @@ export default function ResultCard({ item }) {
           <div className={s.meta}>
             {detections.length > 0 && `${detections.length} 处病害 · `}
             {inference_ms != null && `${inference_ms} ms`}
+            {fmtTime(timestamp) && ` · ${fmtTime(timestamp)}`}
           </div>
         </div>
       </div>
