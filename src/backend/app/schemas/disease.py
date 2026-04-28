@@ -32,10 +32,11 @@ class DiseaseRecordOut(BaseModel):
     repaired_at: Optional[datetime] = None
     cluster_id: Optional[str] = None
     dispatch_info: Optional[Any] = None
+    captured_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
-    @field_serializer('timestamp', 'deleted_at', 'repaired_at', when_used='json')
+    @field_serializer('timestamp', 'deleted_at', 'repaired_at', 'captured_at', when_used='json')
     def serialize_dt(self, v: datetime | None) -> str | None:
         return _to_utc_iso(v)
 

@@ -70,6 +70,7 @@ class DiseaseRecord(Base):
     device_id      = Column(String, nullable=True)
     deleted_at     = Column(DateTime, nullable=True, default=None)
     content_hash   = Column(String(64), nullable=True, index=True)  # SHA-256 图片内容指纹，用于去重
+    captured_at    = Column(DateTime, nullable=True, index=True)    # EXIF 拍摄时间（无 EXIF 则 None，回退到 timestamp）
 
     # 冗余字段（向后兼容旧接口，以 cluster 为准）
     status             = Column(String, default="pending", nullable=False, server_default="pending")

@@ -51,6 +51,7 @@ def _migrate_disease_records():
                 "dispatch_info":      "ALTER TABLE disease_records ADD COLUMN dispatch_info JSONB",
                 "thumbnail_b64":      "ALTER TABLE disease_records ADD COLUMN thumbnail_b64 TEXT",
                 "content_hash":       "ALTER TABLE disease_records ADD COLUMN content_hash VARCHAR(64)",
+                "captured_at":        "ALTER TABLE disease_records ADD COLUMN captured_at TIMESTAMP",
             }
             for col, ddl in new_cols.items():
                 if col not in cols:

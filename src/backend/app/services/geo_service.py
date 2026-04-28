@@ -2,6 +2,7 @@ import io
 import math
 import os
 import random
+from datetime import datetime
 
 from PIL import Image
 from PIL.ExifTags import GPSTAGS, TAGS
@@ -103,6 +104,27 @@ def _parse_exif_gps(img_bytes: bytes) -> tuple[float, float] | None:
             return None
         # EXIF GPS 是 WGS-84，转为高德使用的 GCJ-02
         return wgs84_to_gcj02(lat, lng)
+    except Exception:
+        pass
+    return None
+
+
+def extract_capture_time(img_bytes: bytes) -> datetime | None:
+    """从 EXIF 提取拍摄时间（DateTimeOriginal 优先，回退到 DateTime）。返回 naive datetime 或 None。"""
+    _FMT = "%Y:%m:%d %H:%M:%S"
+    try:
+        image = Image.open(io.BytesIO(img_bytes))
+        exif = image.getexif()
+        if not exif:
+            return None
+        # DateTimeOriginal(0x9003) 是快门按下的时间，比 DateTime(0x0132) 更准确
+        for tag_id in (0x9003, 0x0132):
+            val = exif.get(tag_id)
+            if val:
+                try:
+                    return datetime.strptime(str(val).strip(), _FMT)
+                except ValueError:
+                    continue
     except Exception:
         pass
     return None

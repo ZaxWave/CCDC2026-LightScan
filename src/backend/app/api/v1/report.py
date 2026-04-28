@@ -4,6 +4,7 @@
 """
 import os
 import requests as req
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -62,25 +63,43 @@ def generate_weekly_report(
     )
 
     # ── 2. 统计数据 ─────────────────────────────────────────────
+    from collections import defaultdict
     type_counts: dict[str, int] = {}
     severity_counts = {"高": 0, "中": 0, "低": 0}
     conf_high = conf_mid = conf_low = 0
 
+    cluster_obs: dict = defaultdict(list)
     for r in records:
-        # 类型统计
         name = r.label_cn or SEVERITY.get(r.label or "", (r.label, "—"))[0] or "未知"
         type_counts[name] = type_counts.get(name, 0) + 1
-        # 严重程度
         sev = SEVERITY.get(r.label or "", (None, "低"))[1]
         severity_counts[sev] = severity_counts.get(sev, 0) + 1
-        # 置信度分布
         c = r.confidence or 0
         if c >= 0.8:   conf_high += 1
         elif c >= 0.6: conf_mid  += 1
         else:          conf_low  += 1
+        if r.cluster_id and r.confidence is not None:
+            t = r.captured_at or r.timestamp
+            cluster_obs[r.cluster_id].append((t, r.confidence, name))
+
+    # 演化趋势：按 cluster 分组判断恶化/改善
+    deteriorating, improving = [], []
+    for cid, obs in cluster_obs.items():
+        obs_s = sorted(obs, key=lambda x: x[0] or datetime.min)
+        if len(obs_s) < 2:
+            continue
+        vals = [c for _, c, _ in obs_s]
+        delta = vals[-1] - vals[0]
+        lbl = obs_s[-1][2]
+        if delta > 0.05:
+            deteriorating.append(f"{lbl}（恶化 +{delta*100:.1f}%，{len(obs_s)} 次观测）")
+        elif delta < -0.05:
+            improving.append(f"{lbl}（改善 {delta*100:.1f}%）")
 
     total = len(records)
-    type_lines = "\n".join(f"  · {k}：{v} 处" for k, v in type_counts.items()) or "  · 无检出记录"
+    type_lines   = "\n".join(f"  · {k}：{v} 处" for k, v in type_counts.items()) or "  · 无检出记录"
+    det_lines    = "\n".join(f"  · {s}" for s in deteriorating[:5]) or "  · 无"
+    imp_lines    = "\n".join(f"  · {s}" for s in improving[:3]) or "  · 无"
 
     # ── 3. 构建 Prompt ──────────────────────────────────────────
     prompt = f"""你是一位专业的道路养护工程师，请根据以下智能巡检系统采集的数据，生成一份正式的道路巡检周报。
@@ -102,11 +121,17 @@ def generate_weekly_report(
   · 中置信度（60-79%）：{conf_mid} 处
   · 低置信度（<60%）：{conf_low} 处（建议人工复核）
 
+【演化趋势分析（基于拍摄时间序列）】
+  持续恶化的病害点：
+{det_lines}
+  已改善的病害点：
+{imp_lines}
+
 请生成一份包含以下五个章节的专业周报（总字数 350-500 字，使用正式技术语言）：
 一、巡检概况
 二、主要病害分析与危害等级评估
-三、重点关注区域与风险预警
-四、养护处置建议（按优先级排列）
+三、演化趋势与风险预警（重点说明持续恶化的点）
+四、养护处置建议（按优先级排列，恶化中的优先）
 五、下周巡检重点部署
 
 要求：内容专业、客观、逻辑清晰，避免使用过于口语化的表达。"""
@@ -148,7 +173,7 @@ def generate_weekly_report(
             "lat": round(r.lat, 5),
             "lng": round(r.lng, 5),
             "confidence": round(r.confidence, 2) if r.confidence else None,
-            "timestamp": r.timestamp.strftime("%Y-%m-%d %H:%M") if r.timestamp else None,
+            "timestamp": (r.captured_at or r.timestamp).replace(tzinfo=timezone.utc).strftime("%Y-%m-%d %H:%M UTC+8") if (r.captured_at or r.timestamp) else None,
         }
         for r in sorted_records[:5]
     ]

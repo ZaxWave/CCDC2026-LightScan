@@ -5,9 +5,39 @@ import ReactECharts from 'echarts-for-react';
 import ClusterLayer     from '../components/map/ClusterLayer';
 import HeatmapControls  from '../components/map/HeatmapControls';
 import TimelineModal    from '../components/map/TimelineModal';
-import FusionModal     from '../components/map/FusionModal';
+import FusionModal      from '../components/map/FusionModal';
 import HealthLayer, { computeGrid } from '../components/map/HealthLayer';
 import { dispatchOrder } from '../api/client';
+
+const LABEL_OPTS = ['全部', '坑槽', '纵向裂缝', '龟裂', '横向裂缝'];
+const STATUS_OPTS = [
+  { v: '', l: '全部状态' },
+  { v: 'pending', l: '待修' },
+  { v: 'processing', l: '维修中' },
+  { v: 'repaired', l: '已修' },
+];
+const SOURCE_OPTS = [
+  { v: '', l: '全部来源' },
+  { v: 'dashcam', l: '行车记录仪' },
+  { v: 'mobile', l: '手机' },
+  { v: 'camera', l: '监控' },
+  { v: 'drone', l: '无人机' },
+  { v: 'manual', l: '手动' },
+];
+
+function parseRecordTime(record) {
+  const raw = record.captured_at || record.timestamp;
+  if (!raw) return null;
+  const dt = new Date(raw);
+  return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function bboxArea(bbox) {
+  if (!Array.isArray(bbox) || bbox.length < 4) return null;
+  const [x1, y1, x2, y2] = bbox.map(Number);
+  if ([x1, y1, x2, y2].some(v => Number.isNaN(v))) return null;
+  return Math.abs((x2 - x1) * (y2 - y1));
+}
 
 const AMAP_KEY           = import.meta.env.VITE_AMAP_KEY;
 const AMAP_SECURITY_CODE = import.meta.env.VITE_AMAP_SECURITY_CODE;
@@ -44,6 +74,14 @@ export default function MapPanel({ onBackToDetect }) {
   const [fusionId,     setFusionId]     = useState(null);
   const [sliderVal,    setSliderVal]    = useState(100);
   const [refreshKey,   setRefreshKey]   = useState(0);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [fType,        setFType]        = useState('');
+  const [fStatus,      setFStatus]      = useState('');
+  const [fSource,      setFSource]      = useState('');
+  const [fDateFrom,    setFDateFrom]    = useState('');
+  const [fDateTo,      setFDateTo]      = useState('');
+  const [fConfMin,     setFConfMin]     = useState('');
+  const [fAreaMin,     setFAreaMin]     = useState('');
 
   // ── 初始化地图 ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -216,13 +254,49 @@ export default function MapPanel({ onBackToDetect }) {
   const cutoffTs = minTs + (maxTs - minTs) * (sliderVal / 100);
 
   const filteredRecords = useMemo(() => {
-    if (sliderVal >= 100) return records;
-    return records.filter(r => !r.timestamp || new Date(r.timestamp).getTime() <= cutoffTs);
-  }, [records, sliderVal, cutoffTs]);
+    const filtered = records.filter(r => {
+      if (fType && fType !== '全部') {
+        const labelCn = (r.label_cn || '').toString();
+        const labelEn = (r.label || '').toString();
+        if (!labelCn.includes(fType) && !labelEn.includes(fType)) return false;
+      }
+      if (fStatus && (r.status || 'pending') !== fStatus) return false;
+      if (fSource && (r.source_type || '') !== fSource) return false;
+
+      const time = parseRecordTime(r);
+      if (fDateFrom) {
+        const from = new Date(`${fDateFrom}T00:00:00`);
+        if (!time || time < from) return false;
+      }
+      if (fDateTo) {
+        const to = new Date(`${fDateTo}T23:59:59`);
+        if (!time || time > to) return false;
+      }
+
+      if (fConfMin !== '') {
+        const minConf = Number(fConfMin);
+        if (Number.isNaN(minConf) || minConf < 0) return false;
+        if (r.confidence == null || r.confidence * 100 < minConf) return false;
+      }
+      if (fAreaMin !== '') {
+        const minArea = Number(fAreaMin);
+        if (Number.isNaN(minArea) || minArea < 0) return false;
+        const area = bboxArea(r.bbox);
+        if (area == null || area < minArea) return false;
+      }
+      return true;
+    });
+
+    if (sliderVal >= 100) return filtered;
+    return filtered.filter(r => !r.timestamp || new Date(r.timestamp).getTime() <= cutoffTs);
+  }, [records, fType, fStatus, fSource, fDateFrom, fDateTo, fConfMin, fAreaMin, sliderVal, cutoffTs]);
 
   const cutoffLabel = sliderVal >= 100
     ? '全部数据'
     : new Date(cutoffTs).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+
+  const filterButtonLeft = isSidebarOpen ? 380 : 20;
+  const filterPanelLeft = isSidebarOpen ? 380 : 20;
 
   // ── 路段健康评分网格 ─────────────────────────────────────────────────────
   const healthGrid = useMemo(() =>
@@ -289,6 +363,60 @@ export default function MapPanel({ onBackToDetect }) {
         >
           回到检测
         </button>
+      )}
+
+      <button
+        className={s.filterToggleButton}
+        style={{ left: filterButtonLeft }}
+        onClick={() => setShowFilterPanel(v => !v)}
+        title={showFilterPanel ? '收起筛选' : '打开筛选'}
+      >
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', fontSize: '18px' }}>☰</span>
+      </button>
+      {showFilterPanel && (
+        <div className={s.filterPanel} style={{ left: filterPanelLeft }}>
+          <div className={s.filterPanelHeader}>
+            <div>地图筛选</div>
+            <button className={s.filterPanelClose} onClick={() => setShowFilterPanel(false)}>×</button>
+          </div>
+          <div className={s.filterPanelBody}>
+            <label className={s.filterLabel}>
+              类型
+              <select value={fType} onChange={e => setFType(e.target.value)} className={s.filterInput}>
+                {LABEL_OPTS.map(label => <option key={label} value={label}>{label}</option>)}
+              </select>
+            </label>
+            <label className={s.filterLabel}>
+              状态
+              <select value={fStatus} onChange={e => setFStatus(e.target.value)} className={s.filterInput}>
+                {STATUS_OPTS.map(opt => <option key={opt.v} value={opt.v}>{opt.l}</option>)}
+              </select>
+            </label>
+            <label className={s.filterLabel}>
+              来源
+              <select value={fSource} onChange={e => setFSource(e.target.value)} className={s.filterInput}>
+                {SOURCE_OPTS.map(opt => <option key={opt.v} value={opt.v}>{opt.l}</option>)}
+              </select>
+            </label>
+            <label className={s.filterLabel}>
+              日期从
+              <input type="date" value={fDateFrom} onChange={e => setFDateFrom(e.target.value)} className={s.filterInput} />
+            </label>
+            <label className={s.filterLabel}>
+              到
+              <input type="date" value={fDateTo} onChange={e => setFDateTo(e.target.value)} className={s.filterInput} />
+            </label>
+            <label className={s.filterLabel}>
+              最低置信度
+              <input type="number" min="0" max="100" placeholder="%" value={fConfMin} onChange={e => setFConfMin(e.target.value)} className={s.filterInput} />
+            </label>
+            <label className={s.filterLabel}>
+              最小面积
+              <input type="number" min="0" placeholder="像素²" value={fAreaMin} onChange={e => setFAreaMin(e.target.value)} className={s.filterInput} />
+            </label>
+          </div>
+          <div className={s.filterPanelHint}>按拍摄时间（若有 EXIF）或上传时间回退筛选，并支持多条件组合。</div>
+        </div>
       )}
 
       {/* ── 地图底层 ── */}
@@ -387,12 +515,11 @@ export default function MapPanel({ onBackToDetect }) {
                 </button>
               ))}
             </div>
-          </div>
+          </div> {/* <--- 💡 修复点：添加了这个缺失的 </div> 闭合标签 */}
 
           {/* 中间：饼图 / 健康排行（互斥） */}
           <div style={{ flex: 1, borderBottom: healthMode ? 'none' : '1px solid rgba(255,255,255,0.06)', minHeight: '220px', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
             {!healthMode ? (
-              /* 饼图 */
               <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>
@@ -411,7 +538,6 @@ export default function MapPanel({ onBackToDetect }) {
                 />
               </div>
             ) : (
-              /* 健康排行榜 */
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                 <div style={{ padding: '14px 20px 10px', flexShrink: 0 }}>
                   <span style={{ fontSize: '10px', fontWeight: '600', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.3)' }}>

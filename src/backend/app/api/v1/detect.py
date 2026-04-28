@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.services.inference_service import run_detect_async
 from app.services.clustering_service import assign_cluster
-from app.services.geo_service import extract_gps_strict, wgs84_to_gcj02
+from app.services.geo_service import extract_gps_strict, wgs84_to_gcj02, extract_capture_time
 from app.db.database import get_db
 from app.db.models import DiseaseRecord, DiseaseCluster, User
 from app.api.deps import get_current_user
@@ -75,7 +75,8 @@ async def detect(
             )
 
         img_bytes = await upload.read()
-        img_hash = hashlib.sha256(img_bytes).hexdigest()
+        img_hash    = hashlib.sha256(img_bytes).hexdigest()
+        captured_at = extract_capture_time(img_bytes)  # EXIF 拍摄时间，无则 None
 
         # ── GPS 解析 ────────────────────────────────────────────────────────
         if user_lat is not None and user_lng is not None:
@@ -176,6 +177,7 @@ async def detect(
                     creator_id=current_user.id,
                     thumbnail_b64=img_b64 or None,
                     content_hash=img_hash,
+                    captured_at=captured_at,
                 )
                 db.add(db_record)
                 db.flush()
@@ -216,6 +218,7 @@ async def detect(
                     creator_id=current_user.id,
                     thumbnail_b64=img_b64 or None,
                     content_hash=img_hash,
+                    captured_at=captured_at,
                 )
                 db.add(db_record)
                 cluster = db.query(DiseaseCluster).filter(

@@ -360,7 +360,7 @@ def get_cluster_timeline(
                 DiseaseRecord.timestamp >= three_months_ago,
                 DiseaseRecord.deleted_at == None,
             )
-            .order_by(DiseaseRecord.timestamp.asc())
+            .order_by(func.coalesce(DiseaseRecord.captured_at, DiseaseRecord.timestamp).asc())
             .all()
         )
     else:
@@ -373,7 +373,7 @@ def get_cluster_timeline(
                 DiseaseRecord.timestamp >= three_months_ago,
                 DiseaseRecord.deleted_at == None,
             )
-            .order_by(DiseaseRecord.timestamp.asc())
+            .order_by(func.coalesce(DiseaseRecord.captured_at, DiseaseRecord.timestamp).asc())
             .all()
         )
 
@@ -387,9 +387,12 @@ def get_cluster_timeline(
             except (TypeError, ValueError):
                 pass
 
+        # captured_at 是 EXIF 拍摄时间（更准确），无则回退到入库时间
+        effective_time = r.captured_at or r.timestamp
         timeline.append({
             "id":            r.id,
-            "timestamp":     r.timestamp.replace(tzinfo=timezone.utc).isoformat(),
+            "timestamp":     effective_time.replace(tzinfo=timezone.utc).isoformat() if effective_time else None,
+            "captured_at":   r.captured_at.replace(tzinfo=timezone.utc).isoformat() if r.captured_at else None,
             "confidence":    round(r.confidence, 4) if r.confidence is not None else None,
             "bbox_area":     bbox_area,
             "filename":      r.filename,

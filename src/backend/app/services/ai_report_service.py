@@ -1,6 +1,6 @@
 import os
 from collections import Counter
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 import httpx
 
@@ -23,12 +23,36 @@ def _build_report_prompt(records: list, area: str, days: int) -> str:
         f"  - 已修复：{status_counter.get('repaired', 0)} 条"
     )
 
-    # 严重度高的病害（置信度 > 0.8）
-    high_conf = [r for r in records if (r.confidence or 0) > 0.8]
-    hot_clusters = Counter(r.cluster_id for r in high_conf if r.cluster_id).most_common(3)
-    hot_lines = "\n".join(
-        f"  - 聚类 {cid}（复现 {cnt} 次，高置信）" for cid, cnt in hot_clusters
+    # ── 演化趋势分析：按 cluster 分组计算趋势 ──────────────────────────────
+    from collections import defaultdict
+    cluster_records: dict = defaultdict(list)
+    for r in records:
+        if r.cluster_id and r.confidence is not None:
+            t = r.captured_at or r.timestamp
+            cluster_records[r.cluster_id].append((t, r.confidence, r.label_cn or r.label))
+
+    deteriorating, improving, multi_source = [], [], []
+    for cid, obs in cluster_records.items():
+        obs_sorted = sorted(obs, key=lambda x: x[0] or datetime.min)
+        if len(obs_sorted) < 2:
+            continue
+        conf_vals = [c for _, c, _ in obs_sorted]
+        delta = conf_vals[-1] - conf_vals[0]
+        label = obs_sorted[-1][2]
+        if delta > 0.05:
+            deteriorating.append(f"{label}（+{delta*100:.1f}%，{len(obs_sorted)} 次观测）")
+        elif delta < -0.05:
+            improving.append(f"{label}（{delta*100:.1f}%，已改善）")
+
+    # 多数据源证据（同 cluster 有 ≥2 条记录）
+    source_counter = Counter(r.cluster_id for r in records if r.cluster_id)
+    multi_obs = [(cid, cnt) for cid, cnt in source_counter.most_common(5) if cnt >= 2]
+    multi_lines = "\n".join(
+        f"  - 聚类 {cid[:8]}…（{cnt} 次多源观测）" for cid, cnt in multi_obs
     ) or "  - 无"
+
+    det_lines = "\n".join(f"  - {s}" for s in deteriorating[:5]) or "  - 无"
+    imp_lines = "\n".join(f"  - {s}" for s in improving[:3]) or "  - 无"
 
     return f"""你是一名专业的道路养护管理助手。
 请根据以下 LightScan 系统在「{area}」近 {days} 天内采集的病害数据摘要，
@@ -41,14 +65,21 @@ def _build_report_prompt(records: list, area: str, days: int) -> str:
 {label_lines}
 - 工单处理状态：
 {status_lines}
-- 重点复现病害聚类（置信度 > 0.8）：
-{hot_lines}
+
+【演化趋势分析】
+- 持续恶化的病害点（置信度上升 >5%）：
+{det_lines}
+- 已改善的病害点（置信度下降 >5%）：
+{imp_lines}
+- 多源重复观测聚类（行车记录仪/手机/监控等多视角证据）：
+{multi_lines}
 
 【输出要求】
 1. 巡检概况（2~3 句）
 2. 重点关注区域与病害类型（分条）
-3. 养护优先级建议（按紧急程度排序，不超过 5 条）
-4. 短期处置建议（1~2 句）
+3. 演化趋势分析：重点描述持续恶化的病害点及潜在风险
+4. 养护优先级建议（按紧急程度排序，恶化中的优先，不超过 5 条）
+5. 短期处置建议（1~2 句）
 
 请用中文输出，风格专业简洁，不需要重复列出原始数据。"""
 

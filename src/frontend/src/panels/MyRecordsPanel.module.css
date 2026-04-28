@@ -171,6 +171,53 @@
 
 .filterCount { margin-left: auto; font-size: 12px; color: #9ca3af; }
 
+.subToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
+  align-items: flex-end;
+}
+
+.filterRow {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  width: 100%;
+}
+
+.filterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.filterItem select,
+.filterItem input {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+  background: #fff;
+  color: #111827;
+  font-size: 12px;
+}
+
+.filterHint {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+  min-width: 240px;
+}
+
+.timeTip {
+  margin-top: 2px;
+  font-size: 10px;
+  color: #9ca3af;
+}
+
 /* ── 表格 ─────────────────────────────────────────────────── */
 .tableWrap {
   border: 1px solid #e8e8e8;

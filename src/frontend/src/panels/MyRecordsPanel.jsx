@@ -24,7 +24,30 @@ function StatusBadge({ status }) {
   );
 }
 
-const LABELS = ['全部', '坑槽', '纵向裂缝', '龟裂', '横向裂缝'];
+const LABEL_OPTS = ['全部', '坑槽', '纵向裂缝', '龟裂', '横向裂缝'];
+const STATUS_OPTS = [{ v: '',           l: '全部状态' }, { v: 'pending', l: '待修' }, { v: 'processing', l: '维修中' }, { v: 'repaired', l: '已修' }];
+const SOURCE_OPTS = [{ v: '', l: '全部来源' }, { v: 'dashcam', l: '行车记录仪' }, { v: 'mobile', l: '手机' }, { v: 'camera', l: '监控' }, { v: 'drone', l: '无人机' }, { v: 'manual', l: '手动' }];
+
+function bboxArea(bbox) {
+  if (!Array.isArray(bbox) || bbox.length < 4) return null;
+  const [x1, y1, x2, y2] = bbox.map(Number);
+  return Math.abs((x2 - x1) * (y2 - y1));
+}
+
+function getRecordTime(record) {
+  const t = record.captured_at || record.timestamp;
+  if (!t) return null;
+  return new Date(t);
+}
+
+function formatRecordTime(record) {
+  const time = getRecordTime(record);
+  if (!time || Number.isNaN(time.getTime())) return '—';
+  return time.toLocaleString('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+  });
+}
 
 function confColor(v) {
   if (v >= 0.8) return '#3E6AE1';
@@ -114,6 +137,12 @@ export default function MyRecordsPanel() {
   const [stats,    setStats]    = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [filter,   setFilter]   = useState('全部');
+  const [fStatus,  setFStatus]  = useState('');
+  const [fSource,  setFSource]  = useState('');
+  const [fDateFrom, setFDateFrom] = useState('');
+  const [fDateTo,   setFDateTo]   = useState('');
+  const [fConfMin,  setFConfMin]  = useState('');   // 最低置信度 0-100
+  const [fAreaMin,  setFAreaMin]  = useState('');   // 最小 bbox 面积（像素²）
   const [deleteId, setDeleteId] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [page,     setPage]     = useState(0);
@@ -236,9 +265,45 @@ export default function MyRecordsPanel() {
   };
 
   const filtered = useMemo(() => {
-    if (filter === '全部') return records;
-    return records.filter(r => (r.label_cn || '').includes(filter));
-  }, [records, filter]);
+    return records.filter(r => {
+      if (filter !== '全部') {
+        const labelCn = (r.label_cn || '').toString();
+        const labelEn = (r.label || '').toString();
+        if (!labelCn.includes(filter) && !labelEn.includes(filter)) {
+          return false;
+        }
+      }
+      if (fStatus && (r.status || 'pending') !== fStatus) return false;
+      if (fSource && (r.source_type || '') !== fSource) return false;
+
+      const time = getRecordTime(r);
+      if (fDateFrom) {
+        const from = new Date(`${fDateFrom}T00:00:00`);
+        if (!time || time < from) return false;
+      }
+      if (fDateTo) {
+        const to = new Date(`${fDateTo}T23:59:59`);
+        if (!time || time > to) return false;
+      }
+      if (fConfMin !== '') {
+        const minConf = Number(fConfMin);
+        if (Number.isNaN(minConf) || minConf < 0) return false;
+        if (r.confidence == null || r.confidence * 100 < minConf) return false;
+      }
+      if (fAreaMin !== '') {
+        const minArea = Number(fAreaMin);
+        if (Number.isNaN(minArea) || minArea < 0) return false;
+        const area = bboxArea(r.bbox);
+        if (area == null || area < minArea) return false;
+      }
+      return true;
+    });
+  }, [records, filter, fStatus, fSource, fDateFrom, fDateTo, fConfMin, fAreaMin]);
+
+  useEffect(() => {
+    setPage(0);
+    setSelected(new Set());
+  }, [filter, fStatus, fSource, fDateFrom, fDateTo, fConfMin, fAreaMin]);
 
   const paged      = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
   const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
@@ -328,7 +393,7 @@ export default function MyRecordsPanel() {
 
       {/* ── 筛选栏 ── */}
       <div className={s.toolbar}>
-        {LABELS.map(l => (
+        {LABEL_OPTS.map(l => (
           <button
             key={l}
             className={`${s.filterBtn} ${filter === l ? s.filterActive : ''}`}
@@ -345,6 +410,53 @@ export default function MyRecordsPanel() {
             <button className={s.batchClrBtn} onClick={() => setSelected(new Set())}>取消选择</button>
           </span>
         )}
+      </div>
+
+      <div className={s.subToolbar}>
+        <div className={s.filterRow}>
+          <label className={s.filterItem}>
+            状态
+            <select value={fStatus} onChange={e => setFStatus(e.target.value)}>
+              {STATUS_OPTS.map(opt => <option key={opt.v} value={opt.v}>{opt.l}</option>)}
+            </select>
+          </label>
+          <label className={s.filterItem}>
+            来源
+            <select value={fSource} onChange={e => setFSource(e.target.value)}>
+              {SOURCE_OPTS.map(opt => <option key={opt.v} value={opt.v}>{opt.l}</option>)}
+            </select>
+          </label>
+          <label className={s.filterItem}>
+            日期从
+            <input type="date" value={fDateFrom} onChange={e => setFDateFrom(e.target.value)} />
+          </label>
+          <label className={s.filterItem}>
+            到
+            <input type="date" value={fDateTo} onChange={e => setFDateTo(e.target.value)} />
+          </label>
+          <label className={s.filterItem}>
+            最低置信度
+            <input
+              type="number"
+              min="0"
+              max="100"
+              placeholder="%"
+              value={fConfMin}
+              onChange={e => setFConfMin(e.target.value)}
+            />
+          </label>
+          <label className={s.filterItem}>
+            最小面积
+            <input
+              type="number"
+              min="0"
+              placeholder="像素²"
+              value={fAreaMin}
+              onChange={e => setFAreaMin(e.target.value)}
+            />
+          </label>
+        </div>
+        <div className={s.filterHint}>按时间筛选使用拍摄时间（若有 EXIF）或上传时间回退值。</div>
       </div>
 
       {/* ── 表格 ── */}
@@ -391,12 +503,10 @@ export default function MyRecordsPanel() {
                   </td>
                   <td className={s.fileCell}>{r.filename || '—'}</td>
                   <td className={s.timeCell}>
-                    {r.timestamp
-                      ? new Date(r.timestamp).toLocaleString('zh-CN', {
-                          year: 'numeric', month: '2-digit', day: '2-digit',
-                          hour: '2-digit', minute: '2-digit', hour12: false,
-                        })
-                      : '—'}
+                    {formatRecordTime(r)}
+                    {r.captured_at && r.timestamp && r.captured_at !== r.timestamp ? (
+                      <div className={s.timeTip}>拍摄时间优先，上传时间备份</div>
+                    ) : null}
                   </td>
                   <td><StatusBadge status={r.status || 'pending'} /></td>
                   <td className={s.actionCell}>

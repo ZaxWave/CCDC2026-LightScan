@@ -151,3 +151,99 @@
   color: #fff !important;
   background: rgba(59, 130, 246, 0.5) !important;
 }
+
+.filterToggleButton {
+  position: absolute;
+  top: 20px;
+  z-index: 1002;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.16);
+  transition: transform 0.2s, left 0.3s;
+}
+
+.filterToggleButton:hover {
+  transform: translateY(-1px);
+  background: #fff;
+}
+
+.filterPanel {
+  position: absolute;
+  top: 76px;
+  z-index: 1002;
+  width: 320px;
+  max-height: calc(100vh - 120px);
+  padding: 16px;
+  background: rgba(10, 15, 25, 0.96);
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  box-shadow: 0 24px 48px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+.filterPanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.filterPanelClose {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.filterPanelBody {
+  display: grid;
+  gap: 10px;
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.filterLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.68);
+}
+
+.filterInput {
+  height: 34px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: #fff;
+  padding: 0 10px;
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: rgba(59,130,246,0.95);
+  box-shadow: 0 0 0 3px rgba(59,130,246,0.12);
+}
+
+.filterPanelHint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: rgba(255,255,255,0.46);
+  line-height: 1.6;
+}
